@@ -3,13 +3,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 
-export const metadata = {
-  title: "Tactic & Creativity",
-  icons: {
-    icon: "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png",
-  },
-};
-
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
   const [username, setUsername] = useState("");
@@ -34,7 +27,6 @@ export default function LoginPage() {
     if (error || !data) {
       setErrorMsg(isArabic ? "خطأ في اسم المستخدم أو كلمة المرور" : "Invalid username or password");
     } else {
-      // ✅ هنا نعمل التحويل
       router.push("/dashboard");
     }
   };
@@ -48,7 +40,6 @@ export default function LoginPage() {
         minHeight: "100vh",
       }}
     >
-      {/* Header */}
       <div
         style={{
           width: "100%",
