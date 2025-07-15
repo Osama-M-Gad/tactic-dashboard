@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/utils/supabaseClient";
 
 export const metadata = {
   title: "Tactic & Creativity",
@@ -10,9 +12,31 @@ export const metadata = {
 
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const router = useRouter();
 
   const toggleLanguage = () => {
     setIsArabic(!isArabic);
+  };
+
+  const handleLogin = async () => {
+    setErrorMsg("");
+
+    const { data, error } = await supabase
+      .from("Users")
+      .select("*")
+      .eq("username", username)
+      .eq("password", password)
+      .single();
+
+    if (error || !data) {
+      setErrorMsg(isArabic ? "خطأ في اسم المستخدم أو كلمة المرور" : "Invalid username or password");
+    } else {
+      // ✅ هنا نعمل التحويل
+      router.push("/dashboard");
+    }
   };
 
   return (
@@ -108,6 +132,8 @@ export default function LoginPage() {
           <input
             type="text"
             placeholder={isArabic ? "اسم المستخدم" : "User Name"}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -120,6 +146,8 @@ export default function LoginPage() {
           <input
             type="password"
             placeholder={isArabic ? "كلمة المرور" : "Password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -149,7 +177,12 @@ export default function LoginPage() {
             </a>
           </div>
 
+          {errorMsg && (
+            <p style={{ color: "red", marginBottom: "1rem" }}>{errorMsg}</p>
+          )}
+
           <button
+            onClick={handleLogin}
             style={{
               backgroundColor: "#f5a623",
               color: "#000",
@@ -158,6 +191,7 @@ export default function LoginPage() {
               border: "none",
               borderRadius: "4px",
               fontWeight: "bold",
+              cursor: "pointer",
             }}
           >
             {isArabic ? "تسجيل الدخول" : "Sign in"}
