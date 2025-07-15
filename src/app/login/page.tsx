@@ -1,6 +1,13 @@
 "use client";
 import { useState } from "react";
 
+export const metadata = {
+  title: "Tactic & Creativity",
+  icons: {
+    icon: "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png",
+  },
+};
+
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
 
@@ -28,14 +35,12 @@ export default function LoginPage() {
           padding: "10px 20px",
         }}
       >
-        {/* Logo */}
         <img
           src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
           alt="Tactic Logo"
           style={{ height: "75px" }}
         />
 
-        {/* Buttons */}
         <div style={{ display: "flex", gap: "10px" }}>
           <a
             href="https://www.tai.com.sa"
@@ -71,13 +76,12 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Login box container */}
       <div
         style={{
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "calc(100vh - 60px)", // عشان نراعي الهيدر
+          minHeight: "calc(100vh - 60px)",
         }}
       >
         <div
