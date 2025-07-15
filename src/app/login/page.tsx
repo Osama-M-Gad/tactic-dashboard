@@ -2,7 +2,7 @@
 import { useState } from "react";
 
 export default function LoginPage() {
-  const [isArabic, setIsArabic] = useState(true);
+  const [isArabic, setIsArabic] = useState(false);
 
   const toggleLanguage = () => {
     setIsArabic(!isArabic);
