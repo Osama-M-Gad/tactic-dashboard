@@ -1,24 +1,33 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/utils/supabaseClient";
+import type { User } from "@supabase/supabase-js";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
-      router.push("/login");
-    }
-    setLoading(false);
+    const getUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+      } else {
+        setUser(session.user);
+      }
+      setLoading(false);
+    };
+
+    getUser();
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
@@ -30,9 +39,10 @@ export default function DashboardPage() {
     <div style={{ padding: "2rem", color: "#000" }}>
       <h1>Welcome to Dashboard</h1>
       <p>
-        Hello, {user?.username}
+        Hello, {user?.email}
         <br />
-        {/* Role: {user?.role || "User"} */}
+        {/* هنا لو عايز تعرض صلاحياته مثلا */}
+        {/* Role: {user?.user_metadata?.role || "User"} */}
       </p>
 
       <button

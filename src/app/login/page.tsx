@@ -27,8 +27,6 @@ export default function LoginPage() {
     if (error || !data) {
       setErrorMsg(isArabic ? "خطأ في اسم المستخدم أو كلمة المرور" : "Invalid username or password");
     } else {
-      // حفظ بيانات المستخدم في localStorage
-      localStorage.setItem("user", JSON.stringify(data));
       router.push("/dashboard");
     }
   };
