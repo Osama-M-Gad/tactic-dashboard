@@ -24,6 +24,9 @@ export default function LoginPage() {
       .eq("password", password)
       .single();
 
+    console.log("Returned data:", data);
+    console.log("Returned error:", error);
+
     if (error || !data) {
       setErrorMsg(isArabic ? "خطأ في اسم المستخدم أو كلمة المرور" : "Invalid username or password");
     } else {
