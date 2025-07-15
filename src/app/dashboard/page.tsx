@@ -1,6 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-const [user, setUser] = useState<{ username: string; role?: string } | null>(null);
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -8,7 +7,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     const getUser = async () => {
       const savedUser = localStorage.getItem("currentUser");
