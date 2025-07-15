@@ -17,7 +17,8 @@ export const metadata: Metadata = {
   title: "Tactic Portal",
   description: "Tactic & Creativity Portal",
   icons: {
-    icon: "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png",
+    // Change this to point to the local file in the public directory
+    icon: "/icon.png",
   },
 };
 
@@ -28,12 +29,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
+      {/* REMOVE THIS <head> BLOCK and its content completely,
+          as `metadata` object handles it automatically.
+          You typically don't put a <head> tag directly in RootLayout
+          when using the App Router's metadata API. */}
+      {/* <head>
         <link
           rel="icon"
-          href="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
+          href="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//icon.png"
         />
-      </head>
+      </head> */}
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -42,4 +47,3 @@ export default function RootLayout({
     </html>
   );
 }
-  
