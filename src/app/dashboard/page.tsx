@@ -39,9 +39,8 @@ export default function DashboardPage() {
     <div style={{ padding: "2rem", color: "#000" }}>
       <h1>Welcome to Dashboard</h1>
       <p>
-        Hello, {user?.email}
+        Hello, {user?.user_metadata?.username}
         <br />
-        {/* هنا لو عايز تعرض صلاحياته مثلا */}
         {/* Role: {user?.user_metadata?.role || "User"} */}
       </p>
 
