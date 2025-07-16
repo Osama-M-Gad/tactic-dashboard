@@ -32,7 +32,7 @@ export default function LoginPage() {
     } else {
       // 🟢 حفظ بيانات المستخدم في localStorage
       localStorage.setItem("currentUser", JSON.stringify(data));
-      router.push("/dashboard");
+      router.push("/main"); // ✅ هنا التعديل فقط
     }
   };
 
