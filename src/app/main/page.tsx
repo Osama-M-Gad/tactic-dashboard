@@ -72,16 +72,17 @@ export default function MainPage() {
           style={{ height: "50px" }}
         />
 
-        <div style={{ textAlign: "center", flex: 1 }}>
-          <p style={{ margin: 0 }}>
-            {isArabic ? `مرحباً ${user.username} - اسم الشركة` : `Welcome ${user.username} - Company Name`}
-          </p>
-          <img
-            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
-            alt="Company Logo"
-            style={{ height: "30px", marginTop: "5px" }}
-          />
-        </div>
+        <div style={{ textAlign: "center", flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
+  <p style={{ margin: 0 }}>
+    {isArabic ? `مرحباً ${user.username} - اسم الشركة` : `Welcome ${user.username} - Company Name`}
+  </p>
+  <img
+    src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
+    alt="Company Logo"
+    style={{ height: "30px" }}
+  />
+</div>
+
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <button
