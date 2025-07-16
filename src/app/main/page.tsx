@@ -82,7 +82,7 @@ export default function MainPage() {
         <img
           src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
           alt="Logo"
-          style={{ height: "50px" }}
+          style={{ height: "150px" }}
         />
 
         <div style={{ textAlign: "center", flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
