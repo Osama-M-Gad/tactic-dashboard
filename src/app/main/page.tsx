@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
+import { createClient } from "@supabase/supabase-js";
+
+// 🟢 إعداد Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+);
 
 export default function MainPage() {
   const router = useRouter();
@@ -11,6 +18,17 @@ export default function MainPage() {
   const [isArabic, setIsArabic] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // 🟠 States للفلاتر
+  const [regions, setRegions] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [markets, setMarkets] = useState<any[]>([]);
+  const [teamLeaders, setTeamLeaders] = useState<any[]>([]);
+
+  const [selectedRegion, setSelectedRegion] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedMarket, setSelectedMarket] = useState("");
+  const [selectedTeamLeader, setSelectedTeamLeader] = useState("");
 
   useEffect(() => {
     const savedUser = localStorage.getItem("currentUser");
@@ -20,6 +38,22 @@ export default function MainPage() {
       setUser(JSON.parse(savedUser));
     }
   }, [router]);
+
+  useEffect(() => {
+    const fetchFilters = async () => {
+      const { data: regionsData } = await supabase.from("Markets").select("region").neq("region", "");
+      const { data: citiesData } = await supabase.from("Markets").select("city").neq("city", "");
+      const { data: marketsData } = await supabase.from("Markets").select("name").neq("name", "");
+      const { data: teamLeadersData } = await supabase.from("Users").select("username").eq("role", "Team Leader");
+
+      setRegions([...new Set(regionsData?.map((r) => r.region))]);
+      setCities([...new Set(citiesData?.map((c) => c.city))]);
+      setMarkets([...new Set(marketsData?.map((m) => m.name))]);
+      setTeamLeaders(teamLeadersData || []);
+    };
+
+    fetchFilters();
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("currentUser");
@@ -42,7 +76,6 @@ export default function MainPage() {
     return <p style={{ padding: "2rem" }}>Loading...</p>;
   }
 
-  // ترجمة العناوين
   const labels = {
     "Total Visits": isArabic ? "إجمالي الزيارات" : "Total Visits",
     "Completed Visits": isArabic ? "الزيارات المكتملة" : "Completed Visits",
@@ -130,25 +163,39 @@ export default function MainPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "center", flexWrap: "wrap" }}>
-        {["Region", "City", "Market", "Team Leader"].map((filter) => (
-          <select key={filter} style={{ padding: "5px", borderRadius: "4px", color: "#000" }}>
-            <option>{filter}</option>
-          </select>
-        ))}
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          style={{ padding: "5px", borderRadius: "4px", color: "#000" }}
-        />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          style={{ padding: "5px", borderRadius: "4px", color: "#000" }}
-        />
+        <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }}>
+          <option value="">{isArabic ? "المنطقة" : "Region"}</option>
+          {regions.map((region, i) => (
+            <option key={i} value={region}>{region}</option>
+          ))}
+        </select>
+
+        <select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }}>
+          <option value="">{isArabic ? "المدينة" : "City"}</option>
+          {cities.map((city, i) => (
+            <option key={i} value={city}>{city}</option>
+          ))}
+        </select>
+
+        <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }}>
+          <option value="">{isArabic ? "السوق" : "Market"}</option>
+          {markets.map((market, i) => (
+            <option key={i} value={market}>{market}</option>
+          ))}
+        </select>
+
+        <select value={selectedTeamLeader} onChange={(e) => setSelectedTeamLeader(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }}>
+          <option value="">{isArabic ? "قائد الفريق" : "Team Leader"}</option>
+          {teamLeaders.map((leader, i) => (
+            <option key={i} value={leader.username}>{leader.username}</option>
+          ))}
+        </select>
+
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }} />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: "5px", borderRadius: "4px", color: "#000" }} />
       </div>
 
+      {/* باقي الكود */}
       {/* Divider */}
       <hr style={{ margin: "30px 0", borderColor: "#555" }} />
 
@@ -176,8 +223,7 @@ export default function MainPage() {
                 })}
               />
             </div>
-            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}
-          </p>
+            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}</p>
           </div>
         ))}
       </div>
@@ -209,11 +255,11 @@ export default function MainPage() {
                 })}
               />
             </div>
-            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}
-          </p>
+            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}</p>
           </div>
         ))}
       </div>
+
       {/* Divider */}
       <hr style={{ margin: "30px 0", borderColor: "#555" }} />
 
