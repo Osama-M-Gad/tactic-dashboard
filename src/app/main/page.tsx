@@ -1,12 +1,13 @@
-"use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
+import "react-circular-progressbar/dist/styles.css";
 
 export default function MainPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [isArabic, setIsArabic] = useState(false);
 
   useEffect(() => {
@@ -15,7 +16,6 @@ export default function MainPage() {
       router.push("/login");
     } else {
       setUser(JSON.parse(savedUser));
-      setLoading(false);
     }
   }, [router]);
 
@@ -24,133 +24,103 @@ export default function MainPage() {
     router.push("/login");
   };
 
-  const toggleLanguage = () => {
-    setIsArabic(!isArabic);
-  };
-
-  if (loading) {
+  if (!user) {
     return <p style={{ padding: "2rem" }}>Loading...</p>;
   }
 
+  // بيانات مؤقتة للتجربة
+  const stats = [
+    { value: 519, label: "Total Visits", percentage: 70 },
+    { value: 411, label: "Completed Visits", percentage: 55 },
+    { value: 108, label: "False Visits", percentage: 25 },
+    { value: 79, label: "Completed %", percentage: 79 },
+    { value: 21, label: "False %", percentage: 21 },
+    { value: 22, label: "Total Available", percentage: 80 },
+    { value: 11, label: "Not Available", percentage: 30 },
+    { value: "00:00", label: "Avg Visit Time", percentage: 65 },
+    { value: "00:00", label: "Total Travel Time", percentage: 50 },
+  ];
+
   return (
-    <div style={{ padding: "1rem", direction: isArabic ? "rtl" : "ltr" }}>
+    <div style={{ backgroundColor: "#000", color: "#fff", minHeight: "100vh", padding: "20px" }}>
       {/* Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1rem",
+          backgroundColor: "#444",
+          padding: "10px 20px",
         }}
       >
         <img
           src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-          alt="Company Logo"
-          style={{ height: "60px" }}
+          alt="Logo"
+          style={{ height: "50px" }}
         />
-
+        <p style={{ margin: 0 }}>
+          Welcome {user.username} - Company Name
+        </p>
         <button
-          onClick={toggleLanguage}
+          onClick={() => setIsArabic(!isArabic)}
           style={{
             backgroundColor: "#f5a623",
             color: "#000",
-            padding: "6px 12px",
             border: "none",
             borderRadius: "4px",
-            fontWeight: "bold",
+            padding: "5px 10px",
             cursor: "pointer",
+            fontWeight: "bold",
           }}
         >
           {isArabic ? "EN" : "AR"}
         </button>
       </div>
 
-      {/* Welcome */}
-      <h2>
-        {isArabic
-          ? `مرحبًا ${user.username} - ${user.company_name || "اسم الشركة"}`
-          : `Welcome ${user.username} - ${user.company_name || "Company Name"}`}
-      </h2>
-
       {/* Filters */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "10px",
-          marginTop: "1rem",
-          marginBottom: "1rem",
-        }}
-      >
-        <select style={{ padding: "8px", borderRadius: "4px" }}>
-          <option>{isArabic ? "المنطقة" : "Region"}</option>
-        </select>
-        <select style={{ padding: "8px", borderRadius: "4px" }}>
-          <option>{isArabic ? "المدينة" : "City"}</option>
-        </select>
-        <select style={{ padding: "8px", borderRadius: "4px" }}>
-          <option>{isArabic ? "السوق" : "Market"}</option>
-        </select>
-        <select style={{ padding: "8px", borderRadius: "4px" }}>
-          <option>{isArabic ? "قائد الفريق" : "Team Leader"}</option>
-        </select>
-        <input type="date" style={{ padding: "8px", borderRadius: "4px" }} />
-        <input type="date" style={{ padding: "8px", borderRadius: "4px" }} />
+      <div style={{ display: "flex", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
+        {["Region", "City", "Market", "Team Leader", "Date From", "Date To"].map((filter) => (
+          <select key={filter} style={{ padding: "5px", borderRadius: "4px" }}>
+            <option>{filter}</option>
+          </select>
+        ))}
       </div>
 
-      {/* Stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "10px",
-        }}
-      >
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "إجمالي الزيارات" : "Total Visits"}</h4>
-          <p>150</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "الزيارات المكتملة" : "Completed Visits"}</h4>
-          <p>120</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "زيارات خطأ" : "False Visits"}</h4>
-          <p>30</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "نسبة المكتملة" : "Completed %"}</h4>
-          <p>80%</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "نسبة الخطأ" : "False %"}</h4>
-          <p>20%</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "إجمالي المتاح" : "Total Available Items"}</h4>
-          <p>500</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "غير متاح" : "Not Available Items"}</h4>
-          <p>50</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "متوسط وقت الزيارة" : "Avg Visit Time"}</h4>
-          <p>00:45</p>
-        </div>
-        <div style={{ background: "#f5a623", padding: "1rem", borderRadius: "6px" }}>
-          <h4>{isArabic ? "إجمالي وقت التنقل" : "Total Travel Time"}</h4>
-          <p>01:20</p>
-        </div>
+      {/* Cards */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", marginTop: "30px" }}>
+        {stats.map((stat, index) => (
+          <div
+            key={index}
+            style={{
+              width: "120px",
+              textAlign: "center",
+              backgroundColor: "#111",
+              borderRadius: "8px",
+              padding: "10px",
+            }}
+          >
+            <div style={{ width: 80, height: 80, margin: "0 auto" }}>
+              <CircularProgressbar
+                value={typeof stat.percentage === "number" ? stat.percentage : 0}
+                text={`${stat.value}`}
+                styles={buildStyles({
+                  textColor: "#fff",
+                  pathColor: "#f5a623",
+                  trailColor: "#333",
+                })}
+              />
+            </div>
+            <p style={{ marginTop: "10px", fontSize: "12px" }}>{stat.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Buttons */}
-      <div style={{ marginTop: "2rem" }}>
+      {/* Reports Button */}
+      <div style={{ marginTop: "30px" }}>
         <button
-          onClick={() => router.push("/dashboard")}
           style={{
-            backgroundColor: "#000",
-            color: "#f5a623",
+            backgroundColor: "#f5a623",
+            color: "#000",
             padding: "10px 20px",
             border: "none",
             borderRadius: "4px",
@@ -158,25 +128,25 @@ export default function MainPage() {
             cursor: "pointer",
           }}
         >
-          {isArabic ? "كل التقارير بالتفاصيل" : "All Reports By Details"}
+          All Reports By Details (Mch, Branches ...etc)
         </button>
       </div>
 
       {/* Logout */}
-      <div style={{ marginTop: "1rem" }}>
+      <div style={{ marginTop: "20px" }}>
         <button
           onClick={handleLogout}
           style={{
             backgroundColor: "#f5a623",
             color: "#000",
-            padding: "8px 16px",
+            padding: "10px 20px",
             border: "none",
             borderRadius: "4px",
             fontWeight: "bold",
             cursor: "pointer",
           }}
         >
-          {isArabic ? "تسجيل الخروج" : "Logout"}
+          Logout
         </button>
       </div>
     </div>
