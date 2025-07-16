@@ -214,6 +214,8 @@ export default function MainPage() {
           </div>
         ))}
       </div>
+      {/* Divider */}
+      <hr style={{ margin: "30px 0", borderColor: "#555" }} />
 
       {/* Reports Button */}
       <div style={{ textAlign: "center", marginTop: "30px" }}>
