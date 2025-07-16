@@ -42,6 +42,19 @@ export default function MainPage() {
     return <p style={{ padding: "2rem" }}>Loading...</p>;
   }
 
+  // ترجمة العناوين
+  const labels = {
+    "Total Visits": isArabic ? "إجمالي الزيارات" : "Total Visits",
+    "Completed Visits": isArabic ? "الزيارات المكتملة" : "Completed Visits",
+    "False Visits": isArabic ? "زيارات وهمية" : "False Visits",
+    "Completed %": isArabic ? "نسبة الإكمال" : "Completed %",
+    "False %": isArabic ? "نسبة الوهمية" : "False %",
+    "Total Available": isArabic ? "إجمالي المتاح" : "Total Available",
+    "Not Available": isArabic ? "غير متاح" : "Not Available",
+    "Avg Visit Time": isArabic ? "متوسط وقت الزيارة" : "Avg Visit Time",
+    "Total Travel Time": isArabic ? "إجمالي وقت التنقل" : "Total Travel Time",
+  };
+
   const stats = [
     { value: 519, label: "Total Visits", percentage: 70 },
     { value: 411, label: "Completed Visits", percentage: 55 },
@@ -73,16 +86,15 @@ export default function MainPage() {
         />
 
         <div style={{ textAlign: "center", flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
-  <p style={{ margin: 0 }}>
-    {isArabic ? `مرحباً ${user.username} - اسم الشركة` : `Welcome ${user.username} - Company Name`}
-  </p>
-  <img
-    src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
-    alt="Company Logo"
-    style={{ height: "30px" }}
-  />
-</div>
-
+          <p style={{ margin: 0 }}>
+            {isArabic ? `مرحباً ${user.username} - اسم الشركة` : `Welcome ${user.username} - Company Name`}
+          </p>
+          <img
+            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
+            alt="Company Logo"
+            style={{ height: "30px" }}
+          />
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <button
@@ -146,14 +158,14 @@ export default function MainPage() {
           <div
             key={index}
             style={{
-              width: "120px",
+              width: "150px",
               textAlign: "center",
               backgroundColor: "#111",
               borderRadius: "8px",
-              padding: "10px",
+              padding: "15px",
             }}
           >
-            <div style={{ width: 80, height: 80, margin: "0 auto" }}>
+            <div style={{ width: 100, height: 100, margin: "0 auto" }}>
               <CircularProgressbar
                 value={typeof stat.percentage === "number" ? stat.percentage : 0}
                 text={`${stat.value}`}
@@ -164,7 +176,8 @@ export default function MainPage() {
                 })}
               />
             </div>
-            <p style={{ marginTop: "10px", fontSize: "12px" }}>{stat.label}</p>
+            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}
+          </p>
           </div>
         ))}
       </div>
@@ -178,14 +191,14 @@ export default function MainPage() {
           <div
             key={index}
             style={{
-              width: "120px",
+              width: "150px",
               textAlign: "center",
               backgroundColor: "#111",
               borderRadius: "8px",
-              padding: "10px",
+              padding: "15px",
             }}
           >
-            <div style={{ width: 80, height: 80, margin: "0 auto" }}>
+            <div style={{ width: 100, height: 100, margin: "0 auto" }}>
               <CircularProgressbar
                 value={typeof stat.percentage === "number" ? stat.percentage : 0}
                 text={`${stat.value}`}
@@ -196,7 +209,8 @@ export default function MainPage() {
                 })}
               />
             </div>
-            <p style={{ marginTop: "10px", fontSize: "12px" }}>{stat.label}</p>
+            <p style={{ marginTop: "10px", fontSize: "13px" }}>{labels[stat.label as keyof typeof labels]}
+          </p>
           </div>
         ))}
       </div>
