@@ -122,24 +122,16 @@ export default function SuperAdminDashboardPage() {
         gap: 20,
         width: "100%",
         padding: "0 20px",
-        flexGrow: 1, // يوسع المساحة ليدفع الفوتر تحت
+        flexGrow: 1, // يدفع الفوتر لتحت
       }}
     >
       {buttons.map((label) => (
         <button
           key={label}
           style={{
-            backgroundColor: "#555",
-            color: "#ddd",
-            padding: "14px 18px",
-            border: "2px solid #f5a623",
-            borderRadius: 8,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            width: "100%", // 🟢 يخلي كل الأزرار تاخد نفس العرض
-            height: 70,     // 🟢 ارتفاع ثابت لكل الأزرار
-            cursor: "pointer",
-            boxShadow: "0 0 0 2px #2b2b2b inset",
+            ...buttonStyle,   // ✅ استخدم المتغيّر هنا
+            width: "100%",    // كل الأزرار نفس العرض
+            height: 70,       // كل الأزرار نفس الارتفاع
           }}
           onClick={() => {
             // Placeholder
@@ -150,7 +142,7 @@ export default function SuperAdminDashboardPage() {
       ))}
     </div>
 
-    {/* الفوتر مثبت في الذيل */}
+    {/* فوتر مثبت في الذيل */}
     <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
       {isArabic
         ? "جميع الحقوق محفوظة لشركة Tactic & creativity"
