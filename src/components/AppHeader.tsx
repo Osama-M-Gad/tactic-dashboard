@@ -22,7 +22,7 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
     <div
       style={{
         width: "100%",
-        backgroundColor: "rgba(0,0,0,0.8)",
+        backgroundColor: "#333",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
