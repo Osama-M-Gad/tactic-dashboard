@@ -3,6 +3,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 
+// نوع المستخدم اللي بنحتاجه في الواجهة
+type PortalUser = {
+  id: string;
+  role: string;
+  username?: string;
+  [key: string]: unknown; // للسماح بخصائص إضافية بدون استخدام any
+};
+
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
   const [username, setUsername] = useState("");
@@ -19,12 +27,12 @@ export default function LoginPage() {
   };
 
   // يقرأ المستخدم من localStorage ثم sessionStorage
-  function getStoredUser(): any | null {
+  function getStoredUser(): PortalUser | null {
     try {
       const ls = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null;
-      if (ls) return JSON.parse(ls);
+      if (ls) return JSON.parse(ls) as PortalUser;
       const ss = typeof window !== "undefined" ? sessionStorage.getItem("currentUser") : null;
-      if (ss) return JSON.parse(ss);
+      if (ss) return JSON.parse(ss) as PortalUser;
       return null;
     } catch {
       return null;
@@ -32,7 +40,7 @@ export default function LoginPage() {
   }
 
   // يقرر مسار التحويل حسب الدور
-  function routeByRole(user: any) {
+  function routeByRole(user: PortalUser) {
     const role = String(user?.role || "").toLowerCase();
     if (role === "super_admin") router.replace("/super-admin/dashboard");
     else if (role === "admin") router.replace("/admin/dashboard");
@@ -63,7 +71,9 @@ export default function LoginPage() {
         return;
       }
 
-      const role = String(data.role || "").toLowerCase();
+      const user = data as unknown as PortalUser;
+
+      const role = String(user.role || "").toLowerCase();
       const isSuper = role === "super_admin";
       const isAdmin = role === "admin";
       if (!isSuper && !isAdmin) {
@@ -73,13 +83,13 @@ export default function LoginPage() {
 
       // حفظ الجلسة محليًا
       const storage = rememberMe ? localStorage : sessionStorage;
-      storage.setItem("currentUser", JSON.stringify(data));
+      storage.setItem("currentUser", JSON.stringify(user));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
       // تسجيل جلسة في user_sessions
       const sessionKey = crypto.randomUUID();
       await supabase.from("user_sessions").insert({
-        user_id: data.id,
+        user_id: user.id,
         session_key: sessionKey,
         platform: "web",
         app_version: "portal-v1",
