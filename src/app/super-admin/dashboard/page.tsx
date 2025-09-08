@@ -99,48 +99,63 @@ export default function SuperAdminDashboardPage() {
   };
 
   return (
-    <div style={{ background: "#000", minHeight: "100vh", color: "#fff" }}>
-      <AppHeader
-        isArabic={isArabic}
-        onToggleLang={() => setIsArabic((s) => !s)}
-        showLogout={true}
-      />
+  <div style={{ background: "#000", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
+    <AppHeader
+      isArabic={isArabic}
+      onToggleLang={() => setIsArabic((s) => !s)}
+      showLogout={true}
+    />
 
-      <div style={{ textAlign: "center", marginTop: 24 }}>
-        <h2 style={{ fontWeight: 600 }}>
-          {isArabic ? "مرحباً" : "Welcome"} ({displayName || (isArabic ? "اسم المستخدم" : "User Name")})
-        </h2>
-      </div>
-
-      <div
-        style={{
-          maxWidth: 980,
-          margin: "24px auto 60px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          alignItems: "stretch",
-          justifyItems: "center",
-        }}
-      >
-        {buttons.map((label) => (
-          <button
-            key={label}
-            style={buttonStyle}
-            onClick={() => {
-              // لاحقًا هنربط التنقّل لكل زر حسب المطلوب
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, paddingBottom: 18 }}>
-        {isArabic
-          ? "جميع الحقوق محفوظة لشركة Tactic & creativity"
-          : "all right reserved for Tactic & creativity"}
-      </div>
+    <div style={{ textAlign: "center", marginTop: 24 }}>
+      <h2 style={{ fontWeight: 600 }}>
+        {isArabic ? "مرحباً" : "Welcome"} ({displayName || (isArabic ? "اسم المستخدم" : "User Name")})
+      </h2>
     </div>
-  );
+
+    {/* شبكة الأزرار */}
+    <div
+      style={{
+        maxWidth: 980,
+        margin: "24px auto",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 20,
+        width: "100%",
+        padding: "0 20px",
+        flexGrow: 1, // يوسع المساحة ليدفع الفوتر تحت
+      }}
+    >
+      {buttons.map((label) => (
+        <button
+          key={label}
+          style={{
+            backgroundColor: "#555",
+            color: "#ddd",
+            padding: "14px 18px",
+            border: "2px solid #f5a623",
+            borderRadius: 8,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            width: "100%", // 🟢 يخلي كل الأزرار تاخد نفس العرض
+            height: 70,     // 🟢 ارتفاع ثابت لكل الأزرار
+            cursor: "pointer",
+            boxShadow: "0 0 0 2px #2b2b2b inset",
+          }}
+          onClick={() => {
+            // Placeholder
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+
+    {/* الفوتر مثبت في الذيل */}
+    <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
+      {isArabic
+        ? "جميع الحقوق محفوظة لشركة Tactic & creativity"
+        : "all right reserved for Tactic & creativity"}
+    </div>
+  </div>
+);
 }
