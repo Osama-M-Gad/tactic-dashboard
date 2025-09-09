@@ -80,6 +80,8 @@ export default function SuperAdminDashboardPage() {
             "تحضير التقارير",
             "إيقاف عميل",
             "إضافة مديرين للعميل",
+            "إدخال أسواق (بصفة عامة)", 
+            "إدخال فئات (بصفة عامة)",
           ],
         }
       : {
@@ -96,6 +98,8 @@ export default function SuperAdminDashboardPage() {
             "PREPARE REPORTING",
             "CLIENT STOP",
             "ADD ADMINS FOR CLIENT",
+             "ADD MARKETS (GENERAL)",
+             "ADD CATEGORIES (GENERAL)",
           ],
         };
   }, [isArabic]);
