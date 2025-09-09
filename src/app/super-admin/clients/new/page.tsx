@@ -756,13 +756,10 @@ function Step1Basic(props: Step1BasicProps) {
       <section style={sectionBox}>
         {/* ✅ اختيار العميل */}
         <ClientPicker
-          value={clientId}
-          onChange={(v) => {
-            setClientId(v);
-            if (v) hydrateFromClient(v);
-          }}
-          isArabic={isArabic}
-        />
+  value={clientId}
+  onChange={(v) => { setClientId(v); if (v) hydrateFromClient(v); }}
+  isArabic={isArabic}
+/>
 
         <h3 style={sectionTitle}>{T.basicInfo}</h3>
         <Field label={T.name} required>
