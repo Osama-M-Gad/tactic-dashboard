@@ -20,6 +20,72 @@ type LocalUser = {
   role?: string;
   active?: YesNo;
 };
+type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
+
+type TableLabels = {
+  name: string; arabic_name: string; username: string; email: string;
+  mobile: string; role: string; active: string; remove: string;
+};
+
+type TDict = {
+  requiredHint: string; basicInfo: string; files: string; selections: string; toggles: string;
+  name: string; code: string; commercialNumber: string; address: string;
+  nationalFile: string; taxNumber: string; taxFile: string; commercialFile: string;
+  nationalAddress: string; agreementFile: string; logoFile: string;
+  markets: string; categories: string; linkedUsersPick: string; appSteps: string;
+  yes: string; no: string; enableLocation: string; requireBio: string; activateUsers: string;
+  usersTitle: string; importExcel: string; addUser: string; mustHaveOneUser: string;
+  clientData: string; linkedUsersHeader: string; table: TableLabels;
+};
+
+type Step1BasicProps = {
+  T: TDict;
+  clientId: string | null; setClientId: Setter<string | null>;
+  name: string; setName: Setter<string>;
+  code: string; setCode: Setter<string>;
+  commercialNumber: string; setCommercialNumber: Setter<string>;
+  address: string; setAddress: Setter<string>;
+  nationalFile: File | null; setNationalFile: Setter<File | null>;
+  taxNumber: string; setTaxNumber: Setter<string>;
+  taxFile: File | null; setTaxFile: Setter<File | null>;
+  commercialFile: File | null; setCommercialFile: Setter<File | null>;
+  nationalAddress: string; setNationalAddress: Setter<string>;
+  agreementFile: File | null; setAgreementFile: Setter<File | null>;
+  logoFile: File | null; setLogoFile: Setter<File | null>;
+  markets: string[]; setMarkets: Setter<string[]>;
+  categories: string[]; setCategories: Setter<string[]>;
+  linkedUsersSelection: string[]; setLinkedUsersSelection: Setter<string[]>;
+  appStepsSelected: string[]; setAppStepsSelected: Setter<string[]>;
+  MOCK_MARKETS: string[]; MOCK_CATEGORIES: string[]; MOCK_PICKER_USERS: string[]; MOCK_STEPS: string[];
+  isValid: boolean; isArabic: boolean;
+  enableLocationCheck: YesNo; setEnableLocationCheck: Setter<YesNo>;
+  requireBiometrics: YesNo; setRequireBiometrics: Setter<YesNo>;
+  activateUsers: YesNo; setActivateUsers: Setter<YesNo>;
+};
+
+type Step2UsersProps = {
+  T: TDict;
+  users: LocalUser[];
+  addUserRow: () => void;
+  removeUserRow: (id: string) => void;
+  updateUserRow: (id: string, patch: Partial<LocalUser>) => void;
+  excelFile: File | null;
+  handleExcelChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  roles: string[];
+  isValid: boolean;
+  isArabic: boolean;
+};
+
+type ReviewData = {
+  name: string; code: string; commercialNumber: string; address: string;
+  nationalFile: File | null; taxNumber: string; taxFile: File | null; commercialFile: File | null;
+  nationalAddress: string; agreementFile: File | null; logoFile: File | null;
+  markets: string[]; categories: string[]; linkedUsersSelection: string[]; appStepsSelected: string[];
+  enableLocationCheck: YesNo; requireBiometrics: YesNo; activateUsers: YesNo;
+  users: LocalUser[];
+};
+
+type Step3ReviewProps = { T: TDict; data: ReviewData; isArabic: boolean; };
 
 export default function AddClientWizardMock() {
   const router = useRouter();
@@ -594,7 +660,7 @@ function MultiRow({
 }
 
 /* ======================= Step 1 ======================= */
-function Step1Basic(props: any) {
+function Step1Basic(props: Step1BasicProps) {
   const {
     T,
     clientId,
@@ -749,30 +815,8 @@ function YesNoRow({
 }
 
 /* ======================= Step 2 ======================= */
-function Step2Users({
-  T,
-  users,
-  addUserRow,
-  removeUserRow,
-  updateUserRow,
-  excelFile,
-  handleExcelChange,
-  roles,
-  isValid,
-  isArabic,
-}: {
-  T: any;
-  users: LocalUser[];
-  setUsers?: (u: LocalUser[]) => void;
-  addUserRow: () => void;
-  removeUserRow: (id: string) => void;
-  updateUserRow: (id: string, patch: Partial<LocalUser>) => void;
-  excelFile: File | null;
-  handleExcelChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  roles: string[];
-  isValid: boolean;
-  isArabic: boolean;
-}) {
+function Step2Users(props: Step2UsersProps) {
+  const { T, users, addUserRow, removeUserRow, updateUserRow, excelFile, handleExcelChange, roles, isValid, isArabic } = props;
   return (
     <>
       <section style={sectionBox}>
@@ -869,15 +913,7 @@ const tdStyle: React.CSSProperties = {
 };
 
 /* ======================= Step 3 ======================= */
-function Step3Review({
-  T,
-  data,
-  isArabic,
-}: {
-  T: any;
-  data: any;
-  isArabic: boolean;
-}) {
+function Step3Review({ T, data, isArabic }: Step3ReviewProps) {
   const {
     name,
     code,
@@ -962,11 +998,11 @@ function Step3Review({
   );
 }
 
-function KV({ label, value }: { label: string; value: string }) {
+function KV({ label, value }: { label: string; value: string | number | boolean }) {
   return (
     <div style={{ display: "flex", gap: 12, padding: "6px 0", borderBottom: "1px dashed #2c2c2c" }}>
       <div style={{ minWidth: 220, color: "#bbb", fontWeight: 700 }}>{label}</div>
-      <div style={{ color: "#fff" }}>{value}</div>
+      <div style={{ color: "#fff" }}>{String(value)}</div>
     </div>
   );
 }

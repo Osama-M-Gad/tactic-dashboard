@@ -20,9 +20,11 @@ export default function UploadClientsButton() {
       if (!res.ok) throw new Error(data?.error || 'Upload failed');
       alert(`تم رفع/تحديث ${data.upserted} عميل ✅`);
       resetClients();
-    } catch (e:any) {
-      alert(`خطأ: ${e.message}`);
-    } finally {
+    } catch (e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  alert(`خطأ: ${msg}`);
+}
+ finally {
       setBusy(false);
     }
   };
