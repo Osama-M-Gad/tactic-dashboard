@@ -30,7 +30,8 @@ export default function AddClientMockPage() {
   const [markets, setMarkets] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [linkedUsers, setLinkedUsers] = useState<string[]>([]);
-  const [appSteps, setAppSteps] = useState<string>(""); // كـ JSON نصيًا مؤقتًا
+  const [appStepsSelected, setAppStepsSelected] = useState<string[]>([]);
+const MOCK_STEPS = ["SOS", "DAMDAGE_COUNT", "COMPACTIVITY", "PLANOGRAM", "WH_COUNT"];
 
   // Boolean (Yes/No)
   const [enableLocationCheck, setEnableLocationCheck] = useState<YesNo>("no");
@@ -63,7 +64,7 @@ export default function AddClientMockPage() {
           markets: "الأسواق المرتبطة",
           categories: "الفئات المرتبطة",
           linkedUsers: "المستخدمون المرتبطون",
-          appSteps: "App Steps (JSON نصيًا مؤقتًا)",
+          appSteps: isArabic ? "خطوات التطبيق" : "App Steps",
           yes: "Yes",
           no: "No",
           enableLocation: "تفعيل التحقق من الموقع",
@@ -231,14 +232,16 @@ export default function AddClientMockPage() {
               onToggle={(v) => toggleItem(linkedUsers, setLinkedUsers, v)}
             />
 
-            <Field label={T.appSteps}>
-              <textarea
-                value={appSteps}
-                onChange={(e) => setAppSteps(e.target.value)}
-                style={{ ...inputStyle, minHeight: 90 }}
-                placeholder={isArabic ? `مثال: [{"step":"X"}, {"step":"Y"}]` : `Example: [{"step":"X"}, {"step":"Y"}]`}
-              />
-            </Field>
+            <MultiRow
+  label={T.appSteps}
+  options={MOCK_STEPS}
+  values={appStepsSelected}
+  onToggle={(v) =>
+    setAppStepsSelected((list) =>
+      list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
+    )
+  }
+/>
 
             <a
               href="#"
