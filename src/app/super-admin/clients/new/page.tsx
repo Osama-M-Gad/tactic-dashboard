@@ -7,14 +7,14 @@ type YesNo = "yes" | "no";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 type LocalUser = {
-  id: string;             // محلي فقط لتمييز الصف
+  id: string;
   name?: string;
   arabic_name?: string;
   username?: string;
   email?: string;
   mobile?: string;
   role?: string;
-  active?: YesNo;         // yes/no
+  active?: YesNo;
 };
 
 export default function AddClientWizardMock() {
@@ -38,35 +38,32 @@ export default function AddClientWizardMock() {
   const [commercialFile, setCommercialFile] = useState<File | null>(null);
   const [nationalAddress, setNationalAddress] = useState("");
   const [agreementFile, setAgreementFile] = useState<File | null>(null);
-  const [logoFile, setLogoFile] = useState<File | null>(null); // هنخزن الاسم فقط لاحقًا في الحقيقي
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
-  // Multi-selects (ماكيت)
   const [markets, setMarkets] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [linkedUsersSelection, setLinkedUsersSelection] = useState<string[]>([]); // للاختيار بالاسم (ماكيت فقط)
+  const [linkedUsersSelection, setLinkedUsersSelection] = useState<string[]>([]);
   const [appStepsSelected, setAppStepsSelected] = useState<string[]>([]);
 
-  // Boolean (Yes/No)
   const [enableLocationCheck, setEnableLocationCheck] = useState<YesNo>("no");
   const [requireBiometrics, setRequireBiometrics] = useState<YesNo>("no");
   const [activateUsers, setActivateUsers] = useState<YesNo>("yes");
 
-  // ====== الخطوة 2: المستخدمون المرتبطون (محليًا) ======
+  // ====== الخطوة 2: المستخدمون المرتبطون ======
   const [users, setUsers] = useState<LocalUser[]>([
     makeEmptyUserRow()
   ]);
 
-  // ====== الخطوة 3: مراجعة ======
+  // ====== الخطوة 3 ======
   const [toast, setToast] = useState("");
 
-  // خيارات تجريبية مؤقتة
   const MOCK_MARKETS = ["Riyadh", "Jeddah", "Dammam", "Abha"];
   const MOCK_CATEGORIES = ["Electronics", "Grocery", "Fashion", "Pharmacy"];
-  const MOCK_PICKER_USERS = ["ahmed", "sara", "mohamed", "fatimah"]; // مجرد اختيار صوري (غير users الحقيقي)
+  const MOCK_PICKER_USERS = ["ahmed", "sara", "mohamed", "fatimah"];
   const MOCK_STEPS = ["SOS", "DAMDAGE_COUNT", "COMPACTIVITY", "PLANOGRAM", "WH_COUNT"];
   const MOCK_ROLES = ["super_admin", "admin", "team_leader", "mch", "promo", "viewer"];
 
-  // لغتين + نصوص
+  // ====== النصوص ======
   const T = useMemo(() => {
     return isArabic
       ? {
@@ -77,7 +74,6 @@ export default function AddClientWizardMock() {
           createMock: "إنشاء (ماكيت)",
           cancel: "إلغاء",
           requiredHint: "الحقول الإلزامية مميزة بعلامة *",
-          // step 1
           basicInfo: "البيانات الأساسية",
           files: "الملفات",
           selections: "الاختيارات",
@@ -88,24 +84,23 @@ export default function AddClientWizardMock() {
           address: "العنوان",
           nationalFile: "الملف الوطني (صورة/ PDF)",
           taxNumber: "الرقم الضريبي",
-          taxFile: "ملف ضريبي (اختياري)",
-          commercialFile: "ملف السجل التجاري (اختياري)",
-          nationalAddress: "العنوان الوطني (اختياري)",
-          agreementFile: "ملف/اتفاقية (اختياري)",
-          logoFile: "اللوجو (نحفظ الاسم فقط لاحقًا)",
+          taxFile: "ملف ضريبي",
+          commercialFile: "ملف السجل التجاري",
+          nationalAddress: "العنوان الوطني",
+          agreementFile: "ملف/اتفاقية",
+          logoFile: "اللوجو",
           markets: "الأسواق المرتبطة",
           categories: "الفئات المرتبطة",
-          linkedUsersPick: "اختيار مستخدمين (اسميًا – اختياري)",
+          linkedUsersPick: "اختيار مستخدمين",
           appSteps: "خطوات التطبيق",
           yes: "Yes",
           no: "No",
-          enableLocation: "تفعيل التحقق من الموقع",
+          enableLocation: "تفعيل الموقع",
           requireBio: "تفعيل البايومتركس",
           activateUsers: "تفعيل المستخدمين",
-          // step 2
           usersTitle: "المستخدمون المرتبطون",
           addUser: "إضافة مستخدم",
-          importExcel: "استيراد من Excel (ماكيت)",
+          importExcel: "استيراد من Excel",
           table: {
             name: "الاسم",
             arabic_name: "الاسم بالعربية",
@@ -116,12 +111,11 @@ export default function AddClientWizardMock() {
             active: "نشط؟",
             remove: "حذف",
           },
-          mustHaveOneUser: "يجب إضافة مستخدم واحد على الأقل (بحد أدنى: اسم الدخول + الدور).",
-          // step 3
+          mustHaveOneUser: "يجب إضافة مستخدم واحد على الأقل.",
           reviewTitle: "مراجعة وتأكيد",
           clientData: "بيانات العميل",
           linkedUsersHeader: "المستخدمون",
-          saveToast: "تم تنفيذ الإنشاء (ماكيت) — لا يوجد حفظ فعلي الآن.",
+          saveToast: "تم التنفيذ (ماكيت).",
         }
       : {
           title: "Add New Client - Wizard",
@@ -131,7 +125,6 @@ export default function AddClientWizardMock() {
           createMock: "Create (Mock)",
           cancel: "Cancel",
           requiredHint: "Required fields marked with *",
-          // step 1
           basicInfo: "Basic Info",
           files: "Files",
           selections: "Selections",
@@ -140,26 +133,25 @@ export default function AddClientWizardMock() {
           code: "Client Code",
           commercialNumber: "Commercial Number",
           address: "Address",
-          nationalFile: "National File (Image/PDF)",
+          nationalFile: "National File",
           taxNumber: "Tax Number",
-          taxFile: "Tax File (optional)",
-          commercialFile: "Commercial File (optional)",
-          nationalAddress: "National Address (optional)",
-          agreementFile: "Agreement File (optional)",
-          logoFile: "Logo (we will store filename only later)",
-          markets: "Linked Markets",
-          categories: "Linked Categories",
-          linkedUsersPick: "Pick Users (by name – optional)",
+          taxFile: "Tax File",
+          commercialFile: "Commercial File",
+          nationalAddress: "National Address",
+          agreementFile: "Agreement File",
+          logoFile: "Logo",
+          markets: "Markets",
+          categories: "Categories",
+          linkedUsersPick: "Pick Users",
           appSteps: "App Steps",
           yes: "Yes",
           no: "No",
           enableLocation: "Enable Location Check",
           requireBio: "Require Biometrics",
           activateUsers: "Activate Users",
-          // step 2
           usersTitle: "Linked Users",
           addUser: "Add User",
-          importExcel: "Import from Excel (Mock)",
+          importExcel: "Import from Excel",
           table: {
             name: "Name",
             arabic_name: "Arabic Name",
@@ -170,16 +162,15 @@ export default function AddClientWizardMock() {
             active: "Active?",
             remove: "Remove",
           },
-          mustHaveOneUser: "Please add at least one user (min: username + role).",
-          // step 3
+          mustHaveOneUser: "At least one user is required.",
           reviewTitle: "Review & Confirm",
           clientData: "Client Data",
           linkedUsersHeader: "Users",
-          saveToast: "Created (mock). No real save yet.",
+          saveToast: "Created (mock).",
         };
   }, [isArabic]);
 
-  // تحكم الإتاحة للتنقل بين الخطوات
+  // ====== تحقق صحة الخطوات ======
   const isStep1Valid = useMemo(() => {
     return (
       name.trim().length > 0 &&
@@ -190,14 +181,13 @@ export default function AddClientWizardMock() {
   }, [name, commercialNumber, address, nationalFile]);
 
   const isStep2Valid = useMemo(() => {
-    // على الأقل مستخدم واحد وفيه username + role
     const validUsers = users.filter(
       (u) => (u.username?.trim()?.length || 0) > 0 && (u.role?.trim()?.length || 0) > 0
     );
     return validUsers.length > 0;
   }, [users]);
 
-  // توست مؤقت
+  // ====== Toast ======
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 3000);
@@ -205,38 +195,29 @@ export default function AddClientWizardMock() {
   }, [toast]);
 
   const nextStep = (s: 1 | 2 | 3): 1 | 2 | 3 => (s === 1 ? 2 : 3);
-const prevStep = (s: 1 | 2 | 3): 1 | 2 | 3 => (s === 3 ? 2 : 1);
+  const prevStep = (s: 1 | 2 | 3): 1 | 2 | 3 => (s === 3 ? 2 : 1);
 
-function goNext() {
-  if (step === 1 && !isStep1Valid) return;
-  if (step === 2 && !isStep2Valid) return;
-  setStep(nextStep);
-}
+  function goNext() {
+    if (step === 1 && !isStep1Valid) return;
+    if (step === 2 && !isStep2Valid) return;
+    setStep(nextStep);
+  }
 
-function goBack() {
-  setStep(prevStep);
-}
+  function goBack() {
+    setStep(prevStep);
+  }
 
   function onCreateMock(e: FormEvent) {
     e.preventDefault();
-    // ماكيت: لا حفظ فعلي — مجرد توست
     setToast(T.saveToast);
   }
 
-  // Excel mock (بس بنمسك الملف بدون parsing فعلي)
   const [excelFile, setExcelFile] = useState<File | null>(null);
   function handleExcelChange(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setExcelFile(f);
-    // مستقبلاً: نعمل parsing ونضيف users إلى القائمة
   }
 
-  // أدوات Multi-select (اختيار/إزالة)
-  function toggleItem(list: string[], setList: (v: string[]) => void, value: string) {
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
-  }
-
-  // عمليات المستخدمين المحليين
   function makeEmptyUserRow(): LocalUser {
     return { id: crypto.randomUUID(), active: "yes" };
   }
@@ -250,7 +231,6 @@ function goBack() {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
   }
 
-  // ستايلات عامة
   const wrapper: React.CSSProperties = {
     background: "#000",
     minHeight: "100vh",
@@ -268,45 +248,45 @@ function goBack() {
         <Stepper labels={T.steps} current={step} />
 
         <form onSubmit={onCreateMock}>
+          {/* Step 1 */}
           {step === 1 && (
             <Step1Basic
-  T={T}
-  name={name} setName={setName}
-  code={code} setCode={setCode}
-  commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
-  address={address} setAddress={setAddress}
-  nationalFile={nationalFile} setNationalFile={setNationalFile}
-  taxNumber={taxNumber} setTaxNumber={setTaxNumber}
-  taxFile={taxFile} setTaxFile={setTaxFile}
-  commercialFile={commercialFile} setCommercialFile={setCommercialFile}
-  nationalAddress={nationalAddress} setNationalAddress={setNationalAddress}
-  agreementFile={agreementFile} setAgreementFile={setAgreementFile}
-  logoFile={logoFile} setLogoFile={setLogoFile}
-  markets={markets} setMarkets={setMarkets}
-  categories={categories} setCategories={setCategories}
-  linkedUsersSelection={linkedUsersSelection} setLinkedUsersSelection={setLinkedUsersSelection}
-  appStepsSelected={appStepsSelected} setAppStepsSelected={setAppStepsSelected}
-  MOCK_MARKETS={MOCK_MARKETS}
-  MOCK_CATEGORIES={MOCK_CATEGORIES}
-  MOCK_PICKER_USERS={MOCK_PICKER_USERS}
-  MOCK_STEPS={MOCK_STEPS}
-  isValid={isStep1Valid}
-  isArabic={isArabic}
-  /** ✅ جديد: مرّر قيم التوجلز و الـ setters */
-  enableLocationCheck={enableLocationCheck}
-  setEnableLocationCheck={setEnableLocationCheck}
-  requireBiometrics={requireBiometrics}
-  setRequireBiometrics={setRequireBiometrics}
-  activateUsers={activateUsers}
-  setActivateUsers={setActivateUsers}
-/>
+              T={T}
+              name={name} setName={setName}
+              code={code} setCode={setCode}
+              commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
+              address={address} setAddress={setAddress}
+              nationalFile={nationalFile} setNationalFile={setNationalFile}
+              taxNumber={taxNumber} setTaxNumber={setTaxNumber}
+              taxFile={taxFile} setTaxFile={setTaxFile}
+              commercialFile={commercialFile} setCommercialFile={setCommercialFile}
+              nationalAddress={nationalAddress} setNationalAddress={setNationalAddress}
+              agreementFile={agreementFile} setAgreementFile={setAgreementFile}
+              logoFile={logoFile} setLogoFile={setLogoFile}
+              markets={markets} setMarkets={setMarkets}
+              categories={categories} setCategories={setCategories}
+              linkedUsersSelection={linkedUsersSelection} setLinkedUsersSelection={setLinkedUsersSelection}
+              appStepsSelected={appStepsSelected} setAppStepsSelected={setAppStepsSelected}
+              MOCK_MARKETS={MOCK_MARKETS}
+              MOCK_CATEGORIES={MOCK_CATEGORIES}
+              MOCK_PICKER_USERS={MOCK_PICKER_USERS}
+              MOCK_STEPS={MOCK_STEPS}
+              isValid={isStep1Valid}
+              isArabic={isArabic}
+              enableLocationCheck={enableLocationCheck}
+              setEnableLocationCheck={setEnableLocationCheck}
+              requireBiometrics={requireBiometrics}
+              setRequireBiometrics={setRequireBiometrics}
+              activateUsers={activateUsers}
+              setActivateUsers={setActivateUsers}
+            />
           )}
 
+          {/* Step 2 */}
           {step === 2 && (
             <Step2Users
               T={T}
               users={users}
-              setUsers={setUsers}
               addUserRow={addUserRow}
               removeUserRow={removeUserRow}
               updateUserRow={updateUserRow}
@@ -318,6 +298,7 @@ function goBack() {
             />
           )}
 
+          {/* Step 3 */}
           {step === 3 && (
             <Step3Review
               T={T}
@@ -333,7 +314,7 @@ function goBack() {
             />
           )}
 
-          {/* التحكم في التنقل */}
+          {/* أزرار التحكم */}
           <div style={{ display: "flex", gap: 10, justifyContent: "space-between", marginTop: 16 }}>
             <button type="button" onClick={() => router.back()} style={secondaryBtn}>
               {T.cancel}
@@ -369,11 +350,7 @@ function goBack() {
             </div>
           </div>
 
-          {toast && (
-            <div style={toastStyle}>
-              {toast}
-            </div>
-          )}
+          {toast && <div style={toastStyle}>{toast}</div>}
         </form>
       </div>
     </div>
