@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 
 type YesNo = "yes" | "no";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 type LocalUser = {
   id: string;             // محلي فقط لتمييز الصف
@@ -269,29 +270,36 @@ function goBack() {
         <form onSubmit={onCreateMock}>
           {step === 1 && (
             <Step1Basic
-              T={T}
-              name={name} setName={setName}
-              code={code} setCode={setCode}
-              commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
-              address={address} setAddress={setAddress}
-              nationalFile={nationalFile} setNationalFile={setNationalFile}
-              taxNumber={taxNumber} setTaxNumber={setTaxNumber}
-              taxFile={taxFile} setTaxFile={setTaxFile}
-              commercialFile={commercialFile} setCommercialFile={setCommercialFile}
-              nationalAddress={nationalAddress} setNationalAddress={setNationalAddress}
-              agreementFile={agreementFile} setAgreementFile={setAgreementFile}
-              logoFile={logoFile} setLogoFile={setLogoFile}
-              markets={markets} setMarkets={setMarkets}
-              categories={categories} setCategories={setCategories}
-              linkedUsersSelection={linkedUsersSelection} setLinkedUsersSelection={setLinkedUsersSelection}
-              appStepsSelected={appStepsSelected} setAppStepsSelected={setAppStepsSelected}
-              MOCK_MARKETS={MOCK_MARKETS}
-              MOCK_CATEGORIES={MOCK_CATEGORIES}
-              MOCK_PICKER_USERS={MOCK_PICKER_USERS}
-              MOCK_STEPS={MOCK_STEPS}
-              isValid={isStep1Valid}
-              isArabic={isArabic}
-            />
+  T={T}
+  name={name} setName={setName}
+  code={code} setCode={setCode}
+  commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
+  address={address} setAddress={setAddress}
+  nationalFile={nationalFile} setNationalFile={setNationalFile}
+  taxNumber={taxNumber} setTaxNumber={setTaxNumber}
+  taxFile={taxFile} setTaxFile={setTaxFile}
+  commercialFile={commercialFile} setCommercialFile={setCommercialFile}
+  nationalAddress={nationalAddress} setNationalAddress={setNationalAddress}
+  agreementFile={agreementFile} setAgreementFile={setAgreementFile}
+  logoFile={logoFile} setLogoFile={setLogoFile}
+  markets={markets} setMarkets={setMarkets}
+  categories={categories} setCategories={setCategories}
+  linkedUsersSelection={linkedUsersSelection} setLinkedUsersSelection={setLinkedUsersSelection}
+  appStepsSelected={appStepsSelected} setAppStepsSelected={setAppStepsSelected}
+  MOCK_MARKETS={MOCK_MARKETS}
+  MOCK_CATEGORIES={MOCK_CATEGORIES}
+  MOCK_PICKER_USERS={MOCK_PICKER_USERS}
+  MOCK_STEPS={MOCK_STEPS}
+  isValid={isStep1Valid}
+  isArabic={isArabic}
+  /** ✅ جديد: مرّر قيم التوجلز و الـ setters */
+  enableLocationCheck={enableLocationCheck}
+  setEnableLocationCheck={setEnableLocationCheck}
+  requireBiometrics={requireBiometrics}
+  setRequireBiometrics={setRequireBiometrics}
+  activateUsers={activateUsers}
+  setActivateUsers={setActivateUsers}
+/>
           )}
 
           {step === 2 && (
@@ -559,7 +567,10 @@ function Step1Basic(props: any) {
     appStepsSelected, setAppStepsSelected,
     MOCK_MARKETS, MOCK_CATEGORIES, MOCK_PICKER_USERS, MOCK_STEPS,
     isValid,
-  } = props;
+  enableLocationCheck, setEnableLocationCheck,
+  requireBiometrics, setRequireBiometrics,
+  activateUsers, setActivateUsers,
+} = props;
 
   return (
     <>
@@ -630,12 +641,33 @@ function Step1Basic(props: any) {
       </section>
 
       <section style={sectionBox}>
-        <h3 style={sectionTitle}>{T.toggles}</h3>
-        <YesNoRow label={T.enableLocation} yes={T.yes} no={T.no} />
-        <YesNoRow label={T.requireBio} yes={T.yes} no={T.no} />
-        <YesNoRow label={T.activateUsers} yes={T.yes} no={T.no} />
-        {/* مجرد عرض صوري، القيم الحقيقية موجودة في الصفحة الأم */}
-      </section>
+  <h3 style={sectionTitle}>{T.toggles}</h3>
+
+  <YesNoRow
+    label={T.enableLocation}
+    value={enableLocationCheck}
+    onChange={setEnableLocationCheck}
+    yes={T.yes}
+    no={T.no}
+  />
+
+  <YesNoRow
+    label={T.requireBio}
+    value={requireBiometrics}
+    onChange={setRequireBiometrics}
+    yes={T.yes}
+    no={T.no}
+  />
+
+  <YesNoRow
+    label={T.activateUsers}
+    value={activateUsers}
+    onChange={setActivateUsers}
+    yes={T.yes}
+    no={T.no}
+  />
+</section>
+
 
       {!isValid && (
         <div style={{ marginTop: 10, color: "#ffb3b3" }}>
@@ -650,14 +682,37 @@ function toggleHelper(list: string[], setList: (v: string[]) => void, value: str
   setList(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
 }
 
-function YesNoRow({ label, yes, no }: { label: string; yes: string; no: string }) {
-  const [v, setV] = useState<YesNo>("no");
+function YesNoRow({
+  label,
+  value,
+  onChange,
+  yes,
+  no,
+}: {
+  label: string;
+  value: YesNo;
+  onChange: (v: YesNo) => void;
+  yes: string;
+  no: string;
+}) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ marginBottom: 6, color: "#bbb", fontWeight: 600 }}>{label}</div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" onClick={() => setV("yes")} style={chipBtn(v === "yes")}>{yes}</button>
-        <button type="button" onClick={() => setV("no")}  style={chipBtn(v === "no")}>{no}</button>
+        <button
+          type="button"
+          onClick={() => onChange("yes")}
+          style={chipBtn(value === "yes")}
+        >
+          {yes}
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange("no")}
+          style={chipBtn(value === "no")}
+        >
+          {no}
+        </button>
       </div>
     </div>
   );
