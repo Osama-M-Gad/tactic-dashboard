@@ -153,7 +153,13 @@ export default function SuperAdminDashboardPage() {
           <button
             key={label}
             style={{ ...buttonStyle, width: "100%", height: 70 }}
-            onClick={() => { /* نربط لاحقًا */ }}
+            onClick={() => {
+  if (label === "ADD NEW CLIENT" || label === "إضافة عميل جديد") {
+    router.push("/super-admin/clients/new");
+  } else {
+    // لاحقًا هنربط باقي الأزرار
+  }
+}}
           >
             {label}
           </button>
