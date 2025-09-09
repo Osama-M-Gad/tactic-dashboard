@@ -6,6 +6,7 @@ import ClientPicker from "@/components/ClientPicker";
 import { useStagedClients } from "@/store/useStagedClients";
 import UploadClientsButton from "@/components/UploadClientsButton";
 import MultiSelect from "@/components/MultiSelect";
+import DownloadClientsTemplateButton from "@/components/DownloadClientsTemplateButton";
 
 type YesNo = "yes" | "no";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -28,6 +29,9 @@ type TableLabels = {
 };
 
 type TDict = {
+  title: string;
+  steps: string[];
+  next: string; back: string; createMock: string; cancel: string;
   requiredHint: string; basicInfo: string; files: string; selections: string; toggles: string;
   name: string; code: string; commercialNumber: string; address: string;
   nationalFile: string; taxNumber: string; taxFile: string; commercialFile: string;
@@ -35,7 +39,9 @@ type TDict = {
   markets: string; categories: string; linkedUsersPick: string; appSteps: string;
   yes: string; no: string; enableLocation: string; requireBio: string; activateUsers: string;
   usersTitle: string; importExcel: string; addUser: string; mustHaveOneUser: string;
-  clientData: string; linkedUsersHeader: string; table: TableLabels;
+  reviewTitle?: string; clientData: string; linkedUsersHeader: string;
+  table: TableLabels;
+  saveToast: string;
 };
 
 type Step1BasicProps = {
@@ -61,6 +67,8 @@ type Step1BasicProps = {
   enableLocationCheck: YesNo; setEnableLocationCheck: Setter<YesNo>;
   requireBiometrics: YesNo; setRequireBiometrics: Setter<YesNo>;
   activateUsers: YesNo; setActivateUsers: Setter<YesNo>;
+  // ✅ مهم علشان الأوتوفيل
+  hydrateFromClient: (codeOrId: string) => Promise<void>;
 };
 
 type Step2UsersProps = {
@@ -149,8 +157,38 @@ export default function AddClientWizardMock() {
   const MOCK_STEPS = ["SOS", "DAMDAGE_COUNT", "COMPACTIVITY", "PLANOGRAM", "WH_COUNT"];
   const MOCK_ROLES = ["super_admin", "admin", "team_leader", "mch", "promo", "viewer"];
 
+  // ✅ أوتوفيل بيانات العميل بعد اختياره
+  async function hydrateFromClient(codeOrId: string) {
+    const res = await fetch("/api/clients/get-client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_code: codeOrId }), // لو ClientPicker بيرجع id بدّلها لـ { id: codeOrId }
+    });
+
+    const { client } = (await res.json()) as {
+      client: null | {
+        client_code: string;
+        name_ar: string | null;
+        name_en: string | null;
+        tax_number: string | null;
+        markets: string[];
+        categories: string[];
+        app_steps: string[];
+      };
+    };
+
+    if (!client) return;
+
+    setName(client.name_ar || client.name_en || "");
+    setCode(client.client_code || "");
+    setTaxNumber(client.tax_number || "");
+    setMarkets(Array.isArray(client.markets) ? client.markets : []);
+    setCategories(Array.isArray(client.categories) ? client.categories : []);
+    setAppStepsSelected(Array.isArray(client.app_steps) ? client.app_steps : []);
+  }
+
   // ====== النصوص ======
-  const T = useMemo(() => {
+  const T = useMemo<TDict>(() => {
     return isArabic
       ? {
           title: "معالج إضافة عميل جديد",
@@ -287,11 +325,11 @@ export default function AddClientWizardMock() {
   function goNext() {
     if (step === 1 && !isStep1Valid) return;
     if (step === 2 && !isStep2Valid) return;
-    setStep((s) => nextStep(s)); // ✅ تصحيح
+    setStep((s) => nextStep(s));
   }
 
   function goBack() {
-    setStep((s) => prevStep(s)); // ✅ تصحيح
+    setStep((s) => prevStep(s));
   }
 
   // ====== ربط المسودة (clients) ======
@@ -300,7 +338,6 @@ export default function AddClientWizardMock() {
   function onCreateMock(e: FormEvent) {
     e.preventDefault();
 
-    // بنكوّن client_code و الاسم الأساسي (حالياً نستخدم name للـ ar/en)
     const client_code = (code || clientId || "").toString().trim();
     const nameBoth = (name || "").toString().trim();
 
@@ -310,19 +347,19 @@ export default function AddClientWizardMock() {
     }
 
     const res = addClient({
-  client_code,
-  name_ar: nameBoth,
-  name_en: nameBoth,
-  tax_number: taxNumber || undefined,
-  phone: undefined,
-  email: undefined,
-  default_language: isArabic ? 'ar' : 'en',
-  active: true,
-  start_date: undefined,
-  markets,                // ✅ جديد
-  categories,             // ✅ جديد
-  app_steps: appStepsSelected, // ✅ جديد
-});
+      client_code,
+      name_ar: nameBoth,
+      name_en: nameBoth,
+      tax_number: taxNumber || undefined,
+      phone: undefined,
+      email: undefined,
+      default_language: isArabic ? "ar" : "en",
+      active: true,
+      start_date: undefined,
+      markets,
+      categories,
+      app_steps: appStepsSelected,
+    });
 
     setToast(res.ok ? T.saveToast : res.msg || "Error");
   }
@@ -392,6 +429,7 @@ export default function AddClientWizardMock() {
               setRequireBiometrics={setRequireBiometrics}
               activateUsers={activateUsers}
               setActivateUsers={setActivateUsers}
+              hydrateFromClient={hydrateFromClient} // ✅ مهم
             />
           )}
 
@@ -479,8 +517,9 @@ export default function AddClientWizardMock() {
           {toast && <div style={toastStyle}>{toast}</div>}
         </form>
 
-        {/* زر الرفع إلى سوبابيز (يرفع العملاء الموجودين في المسودة) */}
-        <div style={{ marginTop: 16 }}>
+        {/* تنزيل تمبليت + الرفع إلى سوبابيز */}
+        <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+          <DownloadClientsTemplateButton />
           <UploadClientsButton />
         </div>
       </div>
@@ -570,7 +609,7 @@ const secondaryBtn: React.CSSProperties = {
 const chipBtn = (active: boolean): React.CSSProperties => ({
   padding: "8px 12px",
   borderRadius: 20,
-  border: active ? "2px solid #f5a623" : "1px solid #444",
+  border: active ? "2px solid #f5a623" : "1px solid #444", // ✅ هنا كانت المشكلة
   background: active ? "#303030" : "#1a1a1a",
   color: "#eee",
   fontWeight: 700,
@@ -707,6 +746,7 @@ function Step1Basic(props: Step1BasicProps) {
     activateUsers,
     setActivateUsers,
     isArabic,
+    hydrateFromClient, // ✅
   } = props;
 
   return (
@@ -715,7 +755,14 @@ function Step1Basic(props: Step1BasicProps) {
 
       <section style={sectionBox}>
         {/* ✅ اختيار العميل */}
-        <ClientPicker value={clientId} onChange={setClientId} isArabic={isArabic} />
+        <ClientPicker
+          value={clientId}
+          onChange={(v) => {
+            setClientId(v);
+            if (v) hydrateFromClient(v);
+          }}
+          isArabic={isArabic}
+        />
 
         <h3 style={sectionTitle}>{T.basicInfo}</h3>
         <Field label={T.name} required>
@@ -749,31 +796,51 @@ function Step1Basic(props: Step1BasicProps) {
 
       <section style={sectionBox}>
         <h3 style={sectionTitle}>{T.selections}</h3>
+
+        {/* ✅ MultiSelect للماركتس */}
         <MultiSelect
-  label={T.markets}
-  options={MOCK_MARKETS}
-  values={markets}
-  onChange={setMarkets}
-  placeholder={isArabic ? "اختر الأسواق..." : "Select markets..."}
-  rtl={isArabic}
-/>
-        <MultiRow label={T.categories} options={MOCK_CATEGORIES} values={categories} onToggle={(v) => toggleHelper(categories, setCategories, v)} />
-        <MultiRow
+          label={T.markets}
+          options={MOCK_MARKETS}
+          values={markets}
+          onChange={setMarkets}
+          placeholder={isArabic ? "اختر الأسواق..." : "Select markets..."}
+          rtl={isArabic}
+        />
+
+        {/* ✅ MultiSelect للفئات بدل MultiRow */}
+        <MultiSelect
+          label={T.categories}
+          options={MOCK_CATEGORIES}
+          values={categories}
+          onChange={setCategories}
+          placeholder={isArabic ? "اختر الفئات..." : "Select categories..."}
+          rtl={isArabic}
+        />
+
+        {/* ✅ MultiSelect للمستخدمين */}
+        <MultiSelect
           label={T.linkedUsersPick}
           options={MOCK_PICKER_USERS}
           values={linkedUsersSelection}
-          onToggle={(v) => toggleHelper(linkedUsersSelection, setLinkedUsersSelection, v)}
+          onChange={setLinkedUsersSelection}
+          placeholder={isArabic ? "اختر المستخدمين..." : "Select users..."}
+          rtl={isArabic}
         />
-        <MultiRow label={T.appSteps} options={MOCK_STEPS} values={appStepsSelected} onToggle={(v) => toggleHelper(appStepsSelected, setAppStepsSelected, v)} />
+
+        {/* لسه مخلّي App Steps بالـ chips لحد ما نعملها من الدروب داون برضو */}
+        <MultiRow
+          label={T.appSteps}
+          options={MOCK_STEPS}
+          values={appStepsSelected}
+          onToggle={(v) => toggleHelper(appStepsSelected, setAppStepsSelected, v)}
+        />
       </section>
 
       <section style={sectionBox}>
         <h3 style={sectionTitle}>{T.toggles}</h3>
 
         <YesNoRow label={T.enableLocation} value={enableLocationCheck} onChange={setEnableLocationCheck} yes={T.yes} no={T.no} />
-
         <YesNoRow label={T.requireBio} value={requireBiometrics} onChange={setRequireBiometrics} yes={T.yes} no={T.no} />
-
         <YesNoRow label={T.activateUsers} value={activateUsers} onChange={setActivateUsers} yes={T.yes} no={T.no} />
       </section>
 
@@ -868,8 +935,8 @@ function Step2Users(props: Step2UsersProps) {
                     <select value={u.role ?? ""} onChange={(e) => updateUserRow(u.id, { role: e.target.value })} style={{ ...inputStyle, background: "#1a1a1a" }}>
                       <option value="">{isArabic ? "اختَر" : "Select"}</option>
                       {roles.map((r: string) => (
-  <option key={r} value={r}>{r}</option>
-))}
+                        <option key={r} value={r}>{r}</option>
+                      ))}
                     </select>
                   </td>
                   <td style={tdStyle}>
