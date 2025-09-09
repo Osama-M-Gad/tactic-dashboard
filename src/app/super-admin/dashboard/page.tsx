@@ -43,7 +43,7 @@ export default function SuperAdminDashboardPage() {
     setUser(u);
   }, [router]);
 
-  // 🔎 جلب الاسم العربي/الإنجليزي من Users
+  // 🔎 جلب الاسم العربي/الإنجليزي
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.id) return;
@@ -52,39 +52,59 @@ export default function SuperAdminDashboardPage() {
         .select("name, arabic_name")
         .eq("id", user.id)
         .maybeSingle();
-      if (data) {
-        setProfile({ name: data.name ?? null, arabic_name: data.arabic_name ?? null });
-      } else {
-        setProfile({ name: user.name ?? user.username ?? "", arabic_name: user.arabic_name ?? null });
-      }
+      if (data) setProfile({ name: data.name ?? null, arabic_name: data.arabic_name ?? null });
+      else setProfile({ name: user.name ?? user.username ?? "", arabic_name: user.arabic_name ?? null });
     };
     if (user) fetchProfile();
   }, [user]);
 
   const displayName = useMemo(() => {
     if (!profile) return "";
-    if (isArabic) return profile.arabic_name || profile.name || "";
-    return profile.name || profile.arabic_name || "";
+    return isArabic ? (profile.arabic_name || profile.name || "") : (profile.name || profile.arabic_name || "");
   }, [profile, isArabic]);
+
+  // 🌐 نصوص AR/EN
+  const T = useMemo(() => {
+    return isArabic
+      ? {
+          welcome: "مرحباً",
+          footer: "جميع الحقوق محفوظة لشركة Tactic & creativity",
+          buttons: [
+            "تقارير كل العملاء",
+            "إضافة عميل جديد",
+            "إضافة مستخدم لعميل محدد",
+            "إضافة منتجات لعميل محدد",
+            "إضافة خواص/مميزات للعميل",
+            "إضافة أسواق للعميل",
+            "إضافة زيارة لمستخدم محدد - عميل",
+            "تحضير التقارير",
+            "إيقاف عميل",
+            "إضافة مديرين للعميل",
+          ],
+        }
+      : {
+          welcome: "Welcome",
+          footer: "all right reserved for Tactic & creativity",
+          buttons: [
+            "ALL CLIENTS REPORTS",
+            "ADD NEW CLIENT",
+            "ADD NEW USER FOR CHOSEN CLIENT",
+            "ADD PRODUCTS FOR CHOSEN CLIENT",
+            "ADD FEATURES FOR CLIENT",
+            "ADD MARKETS FOR CLIENT",
+            "ADD VISIT FOR SELECTED USER - CLIENT",
+            "PREPARE REPORTING",
+            "CLIENT STOP",
+            "ADD ADMINS FOR CLIENT",
+          ],
+        };
+  }, [isArabic]);
 
   if (!user) {
     return <div style={{ color: "#fff", padding: 24 }}>Loading…</div>;
   }
 
-  // ⬜️ أزرار الماكيت
-  const buttons: string[] = [
-    "ALL CLIENTS REPORTS",
-    "ADD NEW CLIENT",
-    "ADD NEW USER FOR CHOSEN CLIENT",
-    "ADD PRODUCTS FOR CHOSEN CLIENT",
-    "ADD FEATURES FOR CLIENT",
-    "ADD MARKETS FOR CLIENT",
-    "ADD VISIT FOR SELECTED USER - CLIENT",
-    "PREPARE REPORTING",
-    "CLIENT STOP",
-    "ADD ADMINS FOR CLIENT",
-  ];
-
+  // 🎨 ستايل موحّد للأزرار
   const buttonStyle: React.CSSProperties = {
     backgroundColor: "#555",
     color: "#ddd",
@@ -99,55 +119,47 @@ export default function SuperAdminDashboardPage() {
   };
 
   return (
-  <div style={{ background: "#000", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
-    <AppHeader
-      isArabic={isArabic}
-      onToggleLang={() => setIsArabic((s) => !s)}
-      showLogout={true}
-    />
+    <div style={{ background: "#000", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
+      <AppHeader
+        isArabic={isArabic}
+        onToggleLang={() => setIsArabic((s) => !s)}
+        showLogout={true}
+      />
 
-    <div style={{ textAlign: "center", marginTop: 24 }}>
-      <h2 style={{ fontWeight: 600 }}>
-        {isArabic ? "مرحباً" : "Welcome"} ({displayName || (isArabic ? "اسم المستخدم" : "User Name")})
-      </h2>
-    </div>
+      <div style={{ textAlign: "center", marginTop: 24 }}>
+        <h2 style={{ fontWeight: 600 }}>
+          {T.welcome} ({displayName || (isArabic ? "اسم المستخدم" : "User Name")})
+        </h2>
+      </div>
 
-    {/* شبكة الأزرار */}
-    <div
-      style={{
-        maxWidth: 980,
-        margin: "24px auto",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 20,
-        width: "100%",
-        padding: "0 20px",
-        flexGrow: 1, // يدفع الفوتر لتحت
-      }}
-    >
-      {buttons.map((label) => (
-        <button
-          key={label}
-          style={{
-            ...buttonStyle,   // ✅ استخدم المتغيّر هنا
-            width: "100%",    // كل الأزرار نفس العرض
-            height: 70,       // كل الأزرار نفس الارتفاع
-          }}
-          onClick={() => {
-            // Placeholder
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+      {/* شبكة الأزرار */}
+      <div
+        style={{
+          maxWidth: 980,
+          margin: "24px auto",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 20,
+          width: "100%",
+          padding: "0 20px",
+          flexGrow: 1,
+        }}
+      >
+        {T.buttons.map((label) => (
+          <button
+            key={label}
+            style={{ ...buttonStyle, width: "100%", height: 70 }}
+            onClick={() => { /* نربط لاحقًا */ }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-    {/* فوتر مثبت في الذيل */}
-    <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
-      {isArabic
-        ? "جميع الحقوق محفوظة لشركة Tactic & creativity"
-        : "all right reserved for Tactic & creativity"}
+      {/* فوتر مثبت أسفل */}
+      <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
+        {T.footer}
+      </div>
     </div>
-  </div>
-);
+  );
 }
