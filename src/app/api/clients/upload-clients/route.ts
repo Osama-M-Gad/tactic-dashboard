@@ -14,16 +14,19 @@ export async function POST(req: Request) {
     }
 
     const payload = clients.map((c: any) => ({
-      client_code: String(c.client_code).trim(),
-      name_ar: String(c.name_ar).trim(),
-      name_en: c.name_en ?? null,
-      tax_number: c.tax_number ?? null,
-      phone: c.phone ?? null,
-      email: c.email ?? null,
-      default_language: c.default_language ?? 'ar',
-      active: c.active ?? true,
-      start_date: c.start_date ?? null,
-    }));
+  client_code: String(c.client_code).trim(),
+  name_ar: String(c.name_ar).trim(),
+  name_en: c.name_en ?? null,
+  tax_number: c.tax_number ?? null,
+  phone: c.phone ?? null,
+  email: c.email ?? null,
+  default_language: c.default_language ?? 'ar',
+  active: c.active ?? true,
+  start_date: c.start_date ?? null,
+  markets: Array.isArray(c.markets) ? c.markets : [],           // ✅ جديد
+  categories: Array.isArray(c.categories) ? c.categories : [],   // ✅ جديد
+  app_steps: Array.isArray(c.app_steps) ? c.app_steps : [],      // ✅ جديد
+}));
 
     const { data, error } = await supabase
       .from('clients')

@@ -11,8 +11,12 @@ export type StagedClient = {
   email?: string;
   default_language?: 'ar' | 'en';
   active?: boolean;
-  start_date?: string; // YYYY-MM-DD
+  start_date?: string;        // YYYY-MM-DD
+  markets?: string[];         // ✅ جديد
+  categories?: string[];      // ✅ جديد
+  app_steps?: string[];       // ✅ جديد
 };
+
 
 type State = {
   clients: StagedClient[];

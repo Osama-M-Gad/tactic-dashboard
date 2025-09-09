@@ -5,6 +5,7 @@ import AppHeader from "@/components/AppHeader";
 import ClientPicker from "@/components/ClientPicker";
 import { useStagedClients } from "@/store/useStagedClients";
 import UploadClientsButton from "@/components/UploadClientsButton";
+import MultiSelect from "@/components/MultiSelect";
 
 type YesNo = "yes" | "no";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -243,16 +244,19 @@ export default function AddClientWizardMock() {
     }
 
     const res = addClient({
-      client_code,
-      name_ar: nameBoth,
-      name_en: nameBoth,
-      tax_number: taxNumber || undefined,
-      phone: undefined,
-      email: undefined,
-      default_language: isArabic ? "ar" : "en",
-      active: true,
-      start_date: undefined,
-    });
+  client_code,
+  name_ar: nameBoth,
+  name_en: nameBoth,
+  tax_number: taxNumber || undefined,
+  phone: undefined,
+  email: undefined,
+  default_language: isArabic ? 'ar' : 'en',
+  active: true,
+  start_date: undefined,
+  markets,                // ✅ جديد
+  categories,             // ✅ جديد
+  app_steps: appStepsSelected, // ✅ جديد
+});
 
     setToast(res.ok ? T.saveToast : res.msg || "Error");
   }
@@ -679,7 +683,14 @@ function Step1Basic(props: any) {
 
       <section style={sectionBox}>
         <h3 style={sectionTitle}>{T.selections}</h3>
-        <MultiRow label={T.markets} options={MOCK_MARKETS} values={markets} onToggle={(v) => toggleHelper(markets, setMarkets, v)} />
+        <MultiSelect
+  label={T.markets}
+  options={MOCK_MARKETS}
+  values={markets}
+  onChange={setMarkets}
+  placeholder={isArabic ? "اختر الأسواق..." : "Select markets..."}
+  rtl={isArabic}
+/>
         <MultiRow label={T.categories} options={MOCK_CATEGORIES} values={categories} onToggle={(v) => toggleHelper(categories, setCategories, v)} />
         <MultiRow
           label={T.linkedUsersPick}
