@@ -3,6 +3,8 @@ import { useMemo, useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import ClientPicker from "@/components/ClientPicker";
+import { useStagedClients } from "@/store/useStagedClients";
+import UploadClientsButton from "@/components/UploadClientsButton";
 
 type YesNo = "yes" | "no";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -21,7 +23,7 @@ type LocalUser = {
 export default function AddClientWizardMock() {
   const router = useRouter();
   const [isArabic, setIsArabic] = useState(
-    (typeof window !== "undefined" && localStorage.getItem("lang") === "en") ? false : true
+    typeof window !== "undefined" && localStorage.getItem("lang") === "en" ? false : true
   );
 
   // ====== حالة الـ Wizard ======
@@ -52,9 +54,24 @@ export default function AddClientWizardMock() {
   const [activateUsers, setActivateUsers] = useState<YesNo>("yes");
 
   // ====== الخطوة 2: المستخدمون المرتبطون ======
-  const [users, setUsers] = useState<LocalUser[]>([
-    makeEmptyUserRow()
-  ]);
+  const [users, setUsers] = useState<LocalUser[]>([makeEmptyUserRow()]);
+  function makeEmptyUserRow(): LocalUser {
+    return { id: crypto.randomUUID(), active: "yes" };
+  }
+  function addUserRow() {
+    setUsers((prev) => [...prev, makeEmptyUserRow()]);
+  }
+  function removeUserRow(id: string) {
+    setUsers((prev) => (prev.length > 1 ? prev.filter((u) => u.id !== id) : prev));
+  }
+  function updateUserRow(id: string, patch: Partial<LocalUser>) {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  }
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  function handleExcelChange(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setExcelFile(f);
+  }
 
   // ====== الخطوة 3 ======
   const [toast, setToast] = useState("");
@@ -117,7 +134,7 @@ export default function AddClientWizardMock() {
           reviewTitle: "مراجعة وتأكيد",
           clientData: "بيانات العميل",
           linkedUsersHeader: "المستخدمون",
-          saveToast: "تم التنفيذ (ماكيت).",
+          saveToast: "تم إضافة العميل للمسودة ✅",
         }
       : {
           title: "Add New Client - Wizard",
@@ -168,14 +185,14 @@ export default function AddClientWizardMock() {
           reviewTitle: "Review & Confirm",
           clientData: "Client Data",
           linkedUsersHeader: "Users",
-          saveToast: "Created (mock).",
+          saveToast: "Added to staging ✅",
         };
   }, [isArabic]);
 
   // ====== تحقق صحة الخطوات ======
   const isStep1Valid = useMemo(() => {
     return (
-      !!clientId && // ✅ لازم العميل يُختار
+      !!clientId &&
       name.trim().length > 0 &&
       commercialNumber.trim().length > 0 &&
       address.trim().length > 0 &&
@@ -203,35 +220,41 @@ export default function AddClientWizardMock() {
   function goNext() {
     if (step === 1 && !isStep1Valid) return;
     if (step === 2 && !isStep2Valid) return;
-    setStep(nextStep);
+    setStep((s) => nextStep(s)); // ✅ تصحيح
   }
 
   function goBack() {
-    setStep(prevStep);
+    setStep((s) => prevStep(s)); // ✅ تصحيح
   }
+
+  // ====== ربط المسودة (clients) ======
+  const { addClient } = useStagedClients();
 
   function onCreateMock(e: FormEvent) {
     e.preventDefault();
-    setToast(T.saveToast);
-  }
 
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-  function handleExcelChange(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setExcelFile(f);
-  }
+    // بنكوّن client_code و الاسم الأساسي (حالياً نستخدم name للـ ar/en)
+    const client_code = (code || clientId || "").toString().trim();
+    const nameBoth = (name || "").toString().trim();
 
-  function makeEmptyUserRow(): LocalUser {
-    return { id: crypto.randomUUID(), active: "yes" };
-  }
-  function addUserRow() {
-    setUsers((prev) => [...prev, makeEmptyUserRow()]);
-  }
-  function removeUserRow(id: string) {
-    setUsers((prev) => (prev.length > 1 ? prev.filter((u) => u.id !== id) : prev));
-  }
-  function updateUserRow(id: string, patch: Partial<LocalUser>) {
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+    if (!client_code || !nameBoth) {
+      setToast(isArabic ? "أدخل كود العميل والاسم" : "Enter client code and name");
+      return;
+    }
+
+    const res = addClient({
+      client_code,
+      name_ar: nameBoth,
+      name_en: nameBoth,
+      tax_number: taxNumber || undefined,
+      phone: undefined,
+      email: undefined,
+      default_language: isArabic ? "ar" : "en",
+      active: true,
+      start_date: undefined,
+    });
+
+    setToast(res.ok ? T.saveToast : res.msg || "Error");
   }
 
   const wrapper: React.CSSProperties = {
@@ -257,21 +280,36 @@ export default function AddClientWizardMock() {
               T={T}
               clientId={clientId}
               setClientId={setClientId}
-              name={name} setName={setName}
-              code={code} setCode={setCode}
-              commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
-              address={address} setAddress={setAddress}
-              nationalFile={nationalFile} setNationalFile={setNationalFile}
-              taxNumber={taxNumber} setTaxNumber={setTaxNumber}
-              taxFile={taxFile} setTaxFile={setTaxFile}
-              commercialFile={commercialFile} setCommercialFile={setCommercialFile}
-              nationalAddress={nationalAddress} setNationalAddress={setNationalAddress}
-              agreementFile={agreementFile} setAgreementFile={setAgreementFile}
-              logoFile={logoFile} setLogoFile={setLogoFile}
-              markets={markets} setMarkets={setMarkets}
-              categories={categories} setCategories={setCategories}
-              linkedUsersSelection={linkedUsersSelection} setLinkedUsersSelection={setLinkedUsersSelection}
-              appStepsSelected={appStepsSelected} setAppStepsSelected={setAppStepsSelected}
+              name={name}
+              setName={setName}
+              code={code}
+              setCode={setCode}
+              commercialNumber={commercialNumber}
+              setCommercialNumber={setCommercialNumber}
+              address={address}
+              setAddress={setAddress}
+              nationalFile={nationalFile}
+              setNationalFile={setNationalFile}
+              taxNumber={taxNumber}
+              setTaxNumber={setTaxNumber}
+              taxFile={taxFile}
+              setTaxFile={setTaxFile}
+              commercialFile={commercialFile}
+              setCommercialFile={setCommercialFile}
+              nationalAddress={nationalAddress}
+              setNationalAddress={setNationalAddress}
+              agreementFile={agreementFile}
+              setAgreementFile={setAgreementFile}
+              logoFile={logoFile}
+              setLogoFile={setLogoFile}
+              markets={markets}
+              setMarkets={setMarkets}
+              categories={categories}
+              setCategories={setCategories}
+              linkedUsersSelection={linkedUsersSelection}
+              setLinkedUsersSelection={setLinkedUsersSelection}
+              appStepsSelected={appStepsSelected}
+              setAppStepsSelected={setAppStepsSelected}
               MOCK_MARKETS={MOCK_MARKETS}
               MOCK_CATEGORIES={MOCK_CATEGORIES}
               MOCK_PICKER_USERS={MOCK_PICKER_USERS}
@@ -308,12 +346,25 @@ export default function AddClientWizardMock() {
             <Step3Review
               T={T}
               data={{
-                name, code, commercialNumber, address,
-                nationalFile, taxNumber, taxFile, commercialFile, nationalAddress,
-                agreementFile, logoFile,
-                markets, categories, linkedUsersSelection, appStepsSelected,
-                enableLocationCheck, requireBiometrics, activateUsers,
-                users
+                name,
+                code,
+                commercialNumber,
+                address,
+                nationalFile,
+                taxNumber,
+                taxFile,
+                commercialFile,
+                nationalAddress,
+                agreementFile,
+                logoFile,
+                markets,
+                categories,
+                linkedUsersSelection,
+                appStepsSelected,
+                enableLocationCheck,
+                requireBiometrics,
+                activateUsers,
+                users,
               }}
               isArabic={isArabic}
             />
@@ -357,6 +408,11 @@ export default function AddClientWizardMock() {
 
           {toast && <div style={toastStyle}>{toast}</div>}
         </form>
+
+        {/* زر الرفع إلى سوبابيز (يرفع العملاء الموجودين في المسودة) */}
+        <div style={{ marginTop: 16 }}>
+          <UploadClientsButton />
+        </div>
       </div>
     </div>
   );
@@ -366,25 +422,30 @@ export default function AddClientWizardMock() {
 
 function Stepper({ labels, current }: { labels: string[]; current: 1 | 2 | 3 }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${labels.length}, 1fr)`,
-      gap: 10,
-      margin: "12px 0 20px",
-    }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${labels.length}, 1fr)`,
+        gap: 10,
+        margin: "12px 0 20px",
+      }}
+    >
       {labels.map((label, i) => {
         const idx = (i + 1) as 1 | 2 | 3;
         const active = current === idx;
         return (
-          <div key={label} style={{
-            background: active ? "#333" : "#1a1a1a",
-            border: `2px solid ${active ? "#f5a623" : "#2c2c2c"}`,
-            color: "#fff",
-            padding: "10px 12px",
-            borderRadius: 10,
-            fontWeight: 800,
-            textAlign: "center",
-          }}>
+          <div
+            key={label}
+            style={{
+              background: active ? "#333" : "#1a1a1a",
+              border: `2px solid ${active ? "#f5a623" : "#2c2c2c"}`,
+              color: "#fff",
+              padding: "10px 12px",
+              borderRadius: 10,
+              fontWeight: 800,
+              textAlign: "center",
+            }}
+          >
             {label}
           </div>
         );
@@ -452,7 +513,7 @@ const toastStyle: React.CSSProperties = {
   padding: "10px 12px",
   borderRadius: 8,
   color: "#c7ffc7",
-  fontWeight: 600
+  fontWeight: 600,
 };
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
@@ -532,27 +593,49 @@ function MultiRow({
 function Step1Basic(props: any) {
   const {
     T,
-    clientId, setClientId,
-    name, setName,
-    code, setCode,
-    commercialNumber, setCommercialNumber,
-    address, setAddress,
-    nationalFile, setNationalFile,
-    taxNumber, setTaxNumber,
-    taxFile, setTaxFile,
-    commercialFile, setCommercialFile,
-    nationalAddress, setNationalAddress,
-    agreementFile, setAgreementFile,
-    logoFile, setLogoFile,
-    markets, setMarkets,
-    categories, setCategories,
-    linkedUsersSelection, setLinkedUsersSelection,
-    appStepsSelected, setAppStepsSelected,
-    MOCK_MARKETS, MOCK_CATEGORIES, MOCK_PICKER_USERS, MOCK_STEPS,
+    clientId,
+    setClientId,
+    name,
+    setName,
+    code,
+    setCode,
+    commercialNumber,
+    setCommercialNumber,
+    address,
+    setAddress,
+    nationalFile,
+    setNationalFile,
+    taxNumber,
+    setTaxNumber,
+    taxFile,
+    setTaxFile,
+    commercialFile,
+    setCommercialFile,
+    nationalAddress,
+    setNationalAddress,
+    agreementFile,
+    setAgreementFile,
+    logoFile,
+    setLogoFile,
+    markets,
+    setMarkets,
+    categories,
+    setCategories,
+    linkedUsersSelection,
+    setLinkedUsersSelection,
+    appStepsSelected,
+    setAppStepsSelected,
+    MOCK_MARKETS,
+    MOCK_CATEGORIES,
+    MOCK_PICKER_USERS,
+    MOCK_STEPS,
     isValid,
-    enableLocationCheck, setEnableLocationCheck,
-    requireBiometrics, setRequireBiometrics,
-    activateUsers, setActivateUsers,
+    enableLocationCheck,
+    setEnableLocationCheck,
+    requireBiometrics,
+    setRequireBiometrics,
+    activateUsers,
+    setActivateUsers,
     isArabic,
   } = props;
 
@@ -591,75 +674,33 @@ function Step1Basic(props: any) {
           <input value={nationalAddress} onChange={(e) => setNationalAddress(e.target.value)} style={inputStyle} />
         </Field>
         <FileField label={T.agreementFile} file={agreementFile} onFile={setAgreementFile} />
-        <FileField
-          label={T.logoFile}
-          file={logoFile}
-          onFile={setLogoFile}
-          hint={T.logoFile}
-        />
+        <FileField label={T.logoFile} file={logoFile} onFile={setLogoFile} hint={T.logoFile} />
       </section>
 
       <section style={sectionBox}>
         <h3 style={sectionTitle}>{T.selections}</h3>
-        <MultiRow
-          label={T.markets}
-          options={MOCK_MARKETS}
-          values={markets}
-          onToggle={(v) => toggleHelper(markets, setMarkets, v)}
-        />
-        <MultiRow
-          label={T.categories}
-          options={MOCK_CATEGORIES}
-          values={categories}
-          onToggle={(v) => toggleHelper(categories, setCategories, v)}
-        />
+        <MultiRow label={T.markets} options={MOCK_MARKETS} values={markets} onToggle={(v) => toggleHelper(markets, setMarkets, v)} />
+        <MultiRow label={T.categories} options={MOCK_CATEGORIES} values={categories} onToggle={(v) => toggleHelper(categories, setCategories, v)} />
         <MultiRow
           label={T.linkedUsersPick}
           options={MOCK_PICKER_USERS}
           values={linkedUsersSelection}
           onToggle={(v) => toggleHelper(linkedUsersSelection, setLinkedUsersSelection, v)}
         />
-        <MultiRow
-          label={T.appSteps}
-          options={MOCK_STEPS}
-          values={appStepsSelected}
-          onToggle={(v) => toggleHelper(appStepsSelected, setAppStepsSelected, v)}
-        />
+        <MultiRow label={T.appSteps} options={MOCK_STEPS} values={appStepsSelected} onToggle={(v) => toggleHelper(appStepsSelected, setAppStepsSelected, v)} />
       </section>
 
       <section style={sectionBox}>
         <h3 style={sectionTitle}>{T.toggles}</h3>
 
-        <YesNoRow
-          label={T.enableLocation}
-          value={enableLocationCheck}
-          onChange={setEnableLocationCheck}
-          yes={T.yes}
-          no={T.no}
-        />
+        <YesNoRow label={T.enableLocation} value={enableLocationCheck} onChange={setEnableLocationCheck} yes={T.yes} no={T.no} />
 
-        <YesNoRow
-          label={T.requireBio}
-          value={requireBiometrics}
-          onChange={setRequireBiometrics}
-          yes={T.yes}
-          no={T.no}
-        />
+        <YesNoRow label={T.requireBio} value={requireBiometrics} onChange={setRequireBiometrics} yes={T.yes} no={T.no} />
 
-        <YesNoRow
-          label={T.activateUsers}
-          value={activateUsers}
-          onChange={setActivateUsers}
-          yes={T.yes}
-          no={T.no}
-        />
+        <YesNoRow label={T.activateUsers} value={activateUsers} onChange={setActivateUsers} yes={T.yes} no={T.no} />
       </section>
 
-      {!isValid && (
-        <div style={{ marginTop: 10, color: "#ffb3b3" }}>
-          {/* رسالة توضيحية إن حبيت */}
-        </div>
-      )}
+      {!isValid && <div style={{ marginTop: 10, color: "#ffb3b3" }}>{/* رسالة توضيحية إن حبيت */}</div>}
     </>
   );
 }
@@ -685,18 +726,10 @@ function YesNoRow({
     <div style={{ marginBottom: 12 }}>
       <div style={{ marginBottom: 6, color: "#bbb", fontWeight: 600 }}>{label}</div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="button"
-          onClick={() => onChange("yes")}
-          style={chipBtn(value === "yes")}
-        >
+        <button type="button" onClick={() => onChange("yes")} style={chipBtn(value === "yes")}>
           {yes}
         </button>
-        <button
-          type="button"
-          onClick={() => onChange("no")}
-          style={chipBtn(value === "no")}
-        >
+        <button type="button" onClick={() => onChange("no")} style={chipBtn(value === "no")}>
           {no}
         </button>
       </div>
@@ -740,28 +773,21 @@ function Step2Users({
           </button>
 
           <label style={{ ...secondaryBtn, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleExcelChange}
-              style={{ display: "none" }}
-            />
+            <input type="file" accept=".xlsx,.xls" onChange={handleExcelChange} style={{ display: "none" }} />
             {T.importExcel}
           </label>
 
-          {excelFile && (
-            <div style={{ color: "#bbb", alignSelf: "center" }}>
-              {(isArabic ? "ملف: " : "File: ") + excelFile.name}
-            </div>
-          )}
+          {excelFile && <div style={{ color: "#bbb", alignSelf: "center" }}>{(isArabic ? "ملف: " : "File: ") + excelFile.name}</div>}
         </div>
 
         <div style={{ overflowX: "auto", border: "1px solid #2c2c2c", borderRadius: 8 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
             <thead>
               <tr style={{ background: "#151515" }}>
-                {["name","arabic_name","username","email","mobile","role","active","remove"].map((key) => (
-                  <th key={key} style={thStyle}>{(T.table as any)[key]}</th>
+                {["name", "arabic_name", "username", "email", "mobile", "role", "active", "remove"].map((key) => (
+                  <th key={key} style={thStyle}>
+                    {(T.table as any)[key]}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -769,36 +795,32 @@ function Step2Users({
               {users.map((u) => (
                 <tr key={u.id}>
                   <td style={tdStyle}>
-                    <input value={u.name ?? ""} onChange={(e)=>updateUserRow(u.id,{name:e.target.value})} style={inputStyle}/>
+                    <input value={u.name ?? ""} onChange={(e) => updateUserRow(u.id, { name: e.target.value })} style={inputStyle} />
                   </td>
                   <td style={tdStyle}>
-                    <input value={u.arabic_name ?? ""} onChange={(e)=>updateUserRow(u.id,{arabic_name:e.target.value})} style={inputStyle}/>
+                    <input value={u.arabic_name ?? ""} onChange={(e) => updateUserRow(u.id, { arabic_name: e.target.value })} style={inputStyle} />
                   </td>
                   <td style={tdStyle}>
-                    <input value={u.username ?? ""} onChange={(e)=>updateUserRow(u.id,{username:e.target.value})} style={inputStyle} />
+                    <input value={u.username ?? ""} onChange={(e) => updateUserRow(u.id, { username: e.target.value })} style={inputStyle} />
                   </td>
                   <td style={tdStyle}>
-                    <input value={u.email ?? ""} onChange={(e)=>updateUserRow(u.id,{email:e.target.value})} style={inputStyle}/>
+                    <input value={u.email ?? ""} onChange={(e) => updateUserRow(u.id, { email: e.target.value })} style={inputStyle} />
                   </td>
                   <td style={tdStyle}>
-                    <input value={u.mobile ?? ""} onChange={(e)=>updateUserRow(u.id,{mobile:e.target.value})} style={inputStyle}/>
+                    <input value={u.mobile ?? ""} onChange={(e) => updateUserRow(u.id, { mobile: e.target.value })} style={inputStyle} />
                   </td>
                   <td style={tdStyle}>
-                    <select
-                      value={u.role ?? ""}
-                      onChange={(e)=>updateUserRow(u.id,{role:e.target.value})}
-                      style={{ ...inputStyle, background: "#1a1a1a" }}
-                    >
+                    <select value={u.role ?? ""} onChange={(e) => updateUserRow(u.id, { role: e.target.value })} style={{ ...inputStyle, background: "#1a1a1a" }}>
                       <option value="">{isArabic ? "اختَر" : "Select"}</option>
-                      {roles.map((r)=>(
-                        <option key={r} value={r}>{r}</option>
-                      ))}
+                      {roles.map((r: string) => (
+  <option key={r} value={r}>{r}</option>
+))}
                     </select>
                   </td>
                   <td style={tdStyle}>
                     <select
                       value={u.active ?? "yes"}
-                      onChange={(e)=>updateUserRow(u.id,{active: e.target.value as YesNo})}
+                      onChange={(e) => updateUserRow(u.id, { active: e.target.value as YesNo })}
                       style={{ ...inputStyle, background: "#1a1a1a" }}
                     >
                       <option value="yes">{T.yes}</option>
@@ -806,7 +828,7 @@ function Step2Users({
                     </select>
                   </td>
                   <td style={tdStyle}>
-                    <button type="button" onClick={()=>removeUserRow(u.id)} style={{ ...secondaryBtn, padding: "8px 12px" }}>
+                    <button type="button" onClick={() => removeUserRow(u.id)} style={{ ...secondaryBtn, padding: "8px 12px" }}>
                       {T.table.remove}
                     </button>
                   </td>
@@ -816,11 +838,7 @@ function Step2Users({
           </table>
         </div>
 
-        {!isValid && (
-          <div style={{ marginTop: 10, color: "#ffb3b3" }}>
-            {T.mustHaveOneUser}
-          </div>
-        )}
+        {!isValid && <div style={{ marginTop: 10, color: "#ffb3b3" }}>{T.mustHaveOneUser}</div>}
       </section>
     </>
   );
@@ -850,12 +868,25 @@ function Step3Review({
   isArabic: boolean;
 }) {
   const {
-    name, code, commercialNumber, address,
-    nationalFile, taxNumber, taxFile, commercialFile, nationalAddress,
-    agreementFile, logoFile,
-    markets, categories, linkedUsersSelection, appStepsSelected,
-    enableLocationCheck, requireBiometrics, activateUsers,
-    users
+    name,
+    code,
+    commercialNumber,
+    address,
+    nationalFile,
+    taxNumber,
+    taxFile,
+    commercialFile,
+    nationalAddress,
+    agreementFile,
+    logoFile,
+    markets,
+    categories,
+    linkedUsersSelection,
+    appStepsSelected,
+    enableLocationCheck,
+    requireBiometrics,
+    activateUsers,
+    users,
   } = data;
 
   return (
@@ -893,8 +924,10 @@ function Step3Review({
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
             <thead>
               <tr style={{ background: "#151515" }}>
-                {["name","arabic_name","username","email","mobile","role","active"].map((key) => (
-                  <th key={key} style={thStyle}>{(T.table as any)[key]}</th>
+                {["name", "arabic_name", "username", "email", "mobile", "role", "active"].map((key) => (
+                  <th key={key} style={thStyle}>
+                    {(T.table as any)[key]}
+                  </th>
                 ))}
               </tr>
             </thead>
