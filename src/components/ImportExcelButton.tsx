@@ -20,12 +20,6 @@ const toBool = (v: unknown): boolean | undefined => {
   return undefined;
 };
 
-const toNum = (v: unknown): number | undefined => {
-  if (v == null || v === "") return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-};
-
 const toStrArray = (v: unknown): string[] | undefined => {
   if (Array.isArray(v)) return v.map(String);
   const s = toStr(v);

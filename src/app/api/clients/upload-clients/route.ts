@@ -1,41 +1,92 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Server-only
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
 );
+
+type UpsertClient = {
+  client_code: string;
+  name_ar: string;
+  name_en?: string | null;
+  tax_number?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  default_language?: "ar" | "en";
+  active?: boolean;
+  start_date?: string | null;
+  markets?: string[];
+  categories?: string[];
+  app_steps?: string[];
+};
+
+const toStr = (v: unknown): string | null =>
+  v == null ? null : String(v);
+
+const toStrTrim = (v: unknown): string =>
+  String(v ?? "").trim();
+
+const toBool = (v: unknown): boolean | undefined => {
+  if (v === true || v === false) return v;
+  const s = String(v ?? "").toLowerCase().trim();
+  if (!s) return undefined;
+  if (["true", "1", "yes"].includes(s)) return true;
+  if (["false", "0", "no"].includes(s)) return false;
+  return undefined;
+};
+
+const toStrArray = (v: unknown): string[] => {
+  if (Array.isArray(v)) return v.map(String);
+  const s = String(v ?? "").trim();
+  return s ? s.split(",").map((x) => x.trim()).filter(Boolean) : [];
+};
 
 export async function POST(req: Request) {
   try {
-    const { clients = [] } = await req.json();
-    if (!Array.isArray(clients) || !clients.length) {
-      return NextResponse.json({ error: 'no clients' }, { status: 400 });
+    const body = (await req.json()) as { clients?: unknown };
+    const raw = Array.isArray(body.clients) ? body.clients : [];
+
+    const payload: UpsertClient[] = raw.map((item): UpsertClient => {
+      const r = (item ?? {}) as Record<string, unknown>;
+      const client_code = toStrTrim(r.client_code);
+      const name_ar = toStrTrim(r.name_ar);
+
+      return {
+        client_code,
+        name_ar,
+        name_en: toStr(r.name_en),
+        tax_number: toStr(r.tax_number),
+        phone: toStr(r.phone),
+        email: toStr(r.email),
+        default_language: ((): "ar" | "en" | undefined => {
+          const v = toStrTrim(r.default_language).toLowerCase();
+          return v === "ar" || v === "en" ? (v as "ar" | "en") : undefined;
+        })(),
+        active: toBool(r.active),
+        start_date: toStr(r.start_date),
+        markets: toStrArray(r.markets),
+        categories: toStrArray(r.categories),
+        app_steps: toStrArray(r.app_steps),
+      };
+    });
+
+    if (payload.length === 0) {
+      return NextResponse.json({ error: "no clients" }, { status: 400 });
     }
 
-    const payload = clients.map((c: any) => ({
-  client_code: String(c.client_code).trim(),
-  name_ar: String(c.name_ar).trim(),
-  name_en: c.name_en ?? null,
-  tax_number: c.tax_number ?? null,
-  phone: c.phone ?? null,
-  email: c.email ?? null,
-  default_language: c.default_language ?? 'ar',
-  active: c.active ?? true,
-  start_date: c.start_date ?? null,
-  markets: Array.isArray(c.markets) ? c.markets : [],           // ✅ جديد
-  categories: Array.isArray(c.categories) ? c.categories : [],   // ✅ جديد
-  app_steps: Array.isArray(c.app_steps) ? c.app_steps : [],      // ✅ جديد
-}));
-
     const { data, error } = await supabase
-      .from('clients')
-      .upsert(payload, { onConflict: 'client_code' })
-      .select('id');
+      .from("clients")
+      .upsert(payload, { onConflict: "client_code" })
+      .select("id");
 
-    if (error) throw error;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
     return NextResponse.json({ upserted: data?.length ?? 0 });
-  } catch (e:any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
