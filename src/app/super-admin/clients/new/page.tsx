@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import ClientPicker from "@/components/ClientPicker";
 
 type YesNo = "yes" | "no";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -25,6 +26,7 @@ export default function AddClientWizardMock() {
 
   // ====== حالة الـ Wizard ======
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [clientId, setClientId] = useState<string | null>(null);
 
   // ====== الخطوة 1: بيانات العميل ======
   const [name, setName] = useState("");
@@ -173,12 +175,13 @@ export default function AddClientWizardMock() {
   // ====== تحقق صحة الخطوات ======
   const isStep1Valid = useMemo(() => {
     return (
+      !!clientId && // ✅ لازم العميل يُختار
       name.trim().length > 0 &&
       commercialNumber.trim().length > 0 &&
       address.trim().length > 0 &&
       !!nationalFile
     );
-  }, [name, commercialNumber, address, nationalFile]);
+  }, [clientId, name, commercialNumber, address, nationalFile]);
 
   const isStep2Valid = useMemo(() => {
     const validUsers = users.filter(
@@ -252,6 +255,8 @@ export default function AddClientWizardMock() {
           {step === 1 && (
             <Step1Basic
               T={T}
+              clientId={clientId}
+              setClientId={setClientId}
               name={name} setName={setName}
               code={code} setCode={setCode}
               commercialNumber={commercialNumber} setCommercialNumber={setCommercialNumber}
@@ -527,6 +532,7 @@ function MultiRow({
 function Step1Basic(props: any) {
   const {
     T,
+    clientId, setClientId,
     name, setName,
     code, setCode,
     commercialNumber, setCommercialNumber,
@@ -544,16 +550,20 @@ function Step1Basic(props: any) {
     appStepsSelected, setAppStepsSelected,
     MOCK_MARKETS, MOCK_CATEGORIES, MOCK_PICKER_USERS, MOCK_STEPS,
     isValid,
-  enableLocationCheck, setEnableLocationCheck,
-  requireBiometrics, setRequireBiometrics,
-  activateUsers, setActivateUsers,
-} = props;
+    enableLocationCheck, setEnableLocationCheck,
+    requireBiometrics, setRequireBiometrics,
+    activateUsers, setActivateUsers,
+    isArabic,
+  } = props;
 
   return (
     <>
       <p style={{ color: "#bbb", marginTop: 0 }}>{T.requiredHint}</p>
 
       <section style={sectionBox}>
+        {/* ✅ اختيار العميل */}
+        <ClientPicker value={clientId} onChange={setClientId} isArabic={isArabic} />
+
         <h3 style={sectionTitle}>{T.basicInfo}</h3>
         <Field label={T.name} required>
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -618,37 +628,36 @@ function Step1Basic(props: any) {
       </section>
 
       <section style={sectionBox}>
-  <h3 style={sectionTitle}>{T.toggles}</h3>
+        <h3 style={sectionTitle}>{T.toggles}</h3>
 
-  <YesNoRow
-    label={T.enableLocation}
-    value={enableLocationCheck}
-    onChange={setEnableLocationCheck}
-    yes={T.yes}
-    no={T.no}
-  />
+        <YesNoRow
+          label={T.enableLocation}
+          value={enableLocationCheck}
+          onChange={setEnableLocationCheck}
+          yes={T.yes}
+          no={T.no}
+        />
 
-  <YesNoRow
-    label={T.requireBio}
-    value={requireBiometrics}
-    onChange={setRequireBiometrics}
-    yes={T.yes}
-    no={T.no}
-  />
+        <YesNoRow
+          label={T.requireBio}
+          value={requireBiometrics}
+          onChange={setRequireBiometrics}
+          yes={T.yes}
+          no={T.no}
+        />
 
-  <YesNoRow
-    label={T.activateUsers}
-    value={activateUsers}
-    onChange={setActivateUsers}
-    yes={T.yes}
-    no={T.no}
-  />
-</section>
-
+        <YesNoRow
+          label={T.activateUsers}
+          value={activateUsers}
+          onChange={setActivateUsers}
+          yes={T.yes}
+          no={T.no}
+        />
+      </section>
 
       {!isValid && (
         <div style={{ marginTop: 10, color: "#ffb3b3" }}>
-          {/** ممكن تضيف رسالة توضيح هنا لو حبيت */}
+          {/* رسالة توضيحية إن حبيت */}
         </div>
       )}
     </>
