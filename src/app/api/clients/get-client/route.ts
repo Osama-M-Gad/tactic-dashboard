@@ -1,24 +1,58 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // سيرفر فقط
-);
+type ClientRow = {
+  client_code: string;
+  name_ar: string | null;
+  name_en: string | null;
+  tax_number: string | null;
+  markets: string[];
+  categories: string[];
+  app_steps: string[];
+};
 
 export async function POST(req: Request) {
   try {
-    const { client_code, id } = await req.json();
-    const q = supabase.from("clients").select("*").limit(1);
+    const { client_code, id } = (await req.json()) as {
+      client_code?: string;
+      id?: string;
+    };
 
-    const { data, error } = client_code
-      ? await q.eq("client_code", client_code)
-      : await q.eq("id", id);
+    if (!client_code && !id) {
+      return NextResponse.json({ error: "client_code or id required" }, { status: 400 });
+    }
 
-    if (error) return NextResponse.json({ client: null, error: error.message }, { status: 400 });
+    // أنشئ supabase client داخل الهاندلر لتفادي مشاكل وقت الـ build
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(url, key);
 
-    return NextResponse.json({ client: data?.[0] ?? null });
-  } catch (e: any) {
-    return NextResponse.json({ client: null, error: String(e?.message ?? e) }, { status: 500 });
+    let query = supabase
+      .from("clients")
+      .select("client_code,name_ar,name_en,tax_number,markets,categories,app_steps")
+      .limit(1);
+
+    if (client_code) query = query.eq("client_code", client_code);
+    if (id) query = query.eq("id", id);
+
+    const { data, error } = await query.maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (!data) return NextResponse.json({ client: null });
+
+    const client: ClientRow = {
+      client_code: data.client_code,
+      name_ar: data.name_ar ?? null,
+      name_en: data.name_en ?? null,
+      tax_number: data.tax_number ?? null,
+      markets: Array.isArray(data.markets) ? data.markets : [],
+      categories: Array.isArray(data.categories) ? data.categories : [],
+      app_steps: Array.isArray(data.app_steps) ? data.app_steps : [],
+    };
+
+    return NextResponse.json({ client });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
