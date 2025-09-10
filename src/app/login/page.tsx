@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/utils/supabaseClient";
+import Image from "next/image";
+import { getSupabaseClient } from "@/utils/supabaseClient";
 
 // نوع المستخدم اللي بنحتاجه في الواجهة
 type PortalUser = {
@@ -53,18 +54,19 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogin = async () => {
-    setErrorMsg("");
-    setLoading(true);
+    const handleLogin = async () => {
+      setErrorMsg("");
+      setLoading(true);
 
-    try {
-      // التحقق من المستخدم في جدول Users (حسب تصميمك الحالي)
-      const { data, error } = await supabase
-        .from("Users")
-        .select("*")
-        .eq("username", username.trim())
-        .eq("password", password)
-        .single();
+      try {
+        const supabase = getSupabaseClient();
+        // التحقق من المستخدم في جدول Users (حسب تصميمك الحالي)
+        const { data, error } = await supabase
+          .from("Users")
+          .select("*")
+          .eq("username", username.trim())
+          .eq("password", password)
+          .single();
 
       if (error || !data) {
         setErrorMsg(TEXT.wrong);
@@ -87,13 +89,13 @@ export default function LoginPage() {
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
       // تسجيل جلسة في user_sessions
-      const sessionKey = crypto.randomUUID();
-      await supabase.from("user_sessions").insert({
-        user_id: user.id,
-        session_key: sessionKey,
-        platform: "web",
-        app_version: "portal-v1",
-      });
+        const sessionKey = crypto.randomUUID();
+        await supabase.from("user_sessions").insert({
+          user_id: user.id,
+          session_key: sessionKey,
+          platform: "web",
+          app_version: "portal-v1",
+        });
       storage.setItem("session_key", sessionKey);
 
       // توجيه حسب الدور
@@ -125,11 +127,13 @@ export default function LoginPage() {
           padding: "10px 20px",
         }}
       >
-        <img
-          src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-          alt="Tactic Logo"
-          style={{ height: "75px" }}
-        />
+          <Image
+            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
+            alt="Tactic Logo"
+            width={200}
+            height={75}
+            style={{ height: "75px" }}
+          />
 
         <div style={{ display: "flex", gap: "10px" }}>
           <a
@@ -184,15 +188,17 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          <img
-            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-            alt="Tactic Logo"
-            style={{
-              width: "200px",
-              margin: "0 auto 20px auto",
-              display: "block",
-            }}
-          />
+            <Image
+              src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
+              alt="Tactic Logo"
+              width={200}
+              height={200}
+              style={{
+                width: "200px",
+                margin: "0 auto 20px auto",
+                display: "block",
+              }}
+            />
           <h2 style={{ color: "white", marginBottom: "1rem", whiteSpace: "pre-line" }}>
             {isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in"}
           </h2>

@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/utils/supabaseClient";
+import { getSupabaseClient } from "@/utils/supabaseClient";
 import AppHeader from "@/components/AppHeader";
 
 type PortalUser = {
@@ -47,12 +47,14 @@ export default function SuperAdminDashboardPage() {
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.id) return;
-      const { data } = await supabase
-        .from("Users")
-        .select("name, arabic_name")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (data) setProfile({ name: data.name ?? null, arabic_name: data.arabic_name ?? null });
+        const supabase = getSupabaseClient();
+        const { data } = await supabase
+          .from("Users")
+          .select("name, arabic_name")
+          .eq("id", user.id)
+          .maybeSingle<{ name: string | null; arabic_name: string | null }>();
+        if (data)
+          setProfile({ name: data.name ?? null, arabic_name: data.arabic_name ?? null });
       else setProfile({ name: user.name ?? user.username ?? "", arabic_name: user.arabic_name ?? null });
     };
     if (user) fetchProfile();

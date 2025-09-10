@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect } from "react";
 import { logout } from "@/utils/session";
 
@@ -29,11 +30,13 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
         padding: "10px 20px",
       }}
     >
-      <img
-        src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-        alt="Tactic Logo"
-        style={{ height: "75px" }}
-      />
+        <Image
+          src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
+          alt="Tactic Logo"
+          width={200}
+          height={75}
+          style={{ height: "75px" }}
+        />
 
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <Link

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
-import { supabase } from "@/utils/supabaseClient"; // توحيد العميل
+import { getSupabaseClient } from "@/utils/supabaseClient"; // توحيد العميل
 import AppHeader from "@/components/AppHeader";
 
 export default function AdminDashboardPage() {
@@ -57,14 +57,15 @@ export default function AdminDashboardPage() {
 
   // تحميل الفلاتر (دعم حالتين لحقل الدور في Users)
   useEffect(() => {
-    const fetchFilters = async () => {
-      const { data: regionsData } = await supabase.from("Markets").select("region").neq("region", "");
-      const { data: citiesData } = await supabase.from("Markets").select("city").neq("city", "");
-      const { data: marketsData } = await supabase.from("Markets").select("name").neq("name", "");
-      const { data: teamLeadersData } = await supabase
-        .from("Users")
-        .select("username")
-        .in("role", ["team_leader", "Team Leader"]); // دعم الشكلين
+      const fetchFilters = async () => {
+        const supabase = getSupabaseClient();
+        const { data: regionsData } = await supabase.from("Markets").select("region").neq("region", "");
+        const { data: citiesData } = await supabase.from("Markets").select("city").neq("city", "");
+        const { data: marketsData } = await supabase.from("Markets").select("name").neq("name", "");
+        const { data: teamLeadersData } = await supabase
+          .from("Users")
+          .select("username")
+          .in("role", ["team_leader", "Team Leader"]); // دعم الشكلين
 
       setRegions([...(new Set(regionsData?.map((r) => r.region)))]);
       setCities([...(new Set(citiesData?.map((c) => c.city)))]);
