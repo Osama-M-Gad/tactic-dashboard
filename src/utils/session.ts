@@ -1,5 +1,5 @@
 "use client";
-import { supabase } from "@/utils/supabaseClient";
+import { getSupabaseClient } from "@/utils/supabaseClient";
 
 /** يقرأ المستخدم ومفتاح الجلسة من التخزين المحلي/المؤقت */
 function readStored() {
@@ -28,16 +28,17 @@ export function clearStoredSession() {
 /** تسجيل الخروج: يحدّث user_sessions.logout_at ثم يمسح التخزين ويعيد التوجيه */
 export async function logout() {
   const { user, session_key } = readStored();
-  try {
-    if (user?.id && session_key) {
-      await supabase
-        .from("user_sessions")
-        .update({ logout_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .eq("session_key", session_key)
-        .is("logout_at", null);
-    }
-  } catch (e) {
+    try {
+      if (user?.id && session_key) {
+        const supabase = getSupabaseClient();
+        await supabase
+          .from("user_sessions")
+          .update({ logout_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("session_key", session_key)
+          .is("logout_at", null);
+      }
+    } catch (e) {
     console.warn("logout update failed", e);
   } finally {
     clearStoredSession();

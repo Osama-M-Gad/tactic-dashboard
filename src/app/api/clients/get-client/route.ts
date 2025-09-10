@@ -23,8 +23,11 @@ export async function POST(req: Request) {
     }
 
     // أنشئ supabase client داخل الهاندلر لتفادي مشاكل وقت الـ build
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) {
+      return NextResponse.json({ error: "Missing Supabase environment variables" }, { status: 500 });
+    }
     const supabase = createClient(url, key);
 
     let query = supabase

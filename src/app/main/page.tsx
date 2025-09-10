@@ -1,16 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
-import { createClient } from "@supabase/supabase-js";
-
-// 🟢 إعداد Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-);
+import { getSupabaseClient } from "@/utils/supabaseClient";
 
 export default function MainPage() {
   const router = useRouter();
@@ -40,11 +35,12 @@ export default function MainPage() {
   }, [router]);
 
   useEffect(() => {
-    const fetchFilters = async () => {
-      const { data: regionsData } = await supabase.from("Markets").select("region").neq("region", "");
-      const { data: citiesData } = await supabase.from("Markets").select("city").neq("city", "");
-      const { data: marketsData } = await supabase.from("Markets").select("name").neq("name", "");
-      const { data: teamLeadersData } = await supabase.from("Users").select("username").eq("role", "Team Leader");
+      const fetchFilters = async () => {
+        const supabase = getSupabaseClient();
+        const { data: regionsData } = await supabase.from("Markets").select("region").neq("region", "");
+        const { data: citiesData } = await supabase.from("Markets").select("city").neq("city", "");
+        const { data: marketsData } = await supabase.from("Markets").select("name").neq("name", "");
+        const { data: teamLeadersData } = await supabase.from("Users").select("username").eq("role", "Team Leader");
 
       setRegions([...new Set(regionsData?.map((r) => r.region))]);
       setCities([...new Set(citiesData?.map((c) => c.city))]);
@@ -55,22 +51,22 @@ export default function MainPage() {
     fetchFilters();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("currentUser");
-    router.push("/login");
-  };
+    const handleLogout = () => {
+      localStorage.removeItem("currentUser");
+      router.push("/login");
+    };
 
-  const handleDateChange = () => {
-    if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
-      alert("⚠️ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية");
-      setDateFrom("");
-      setDateTo("");
-    }
-  };
+    const handleDateChange = useCallback(() => {
+      if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+        alert("⚠️ تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية");
+        setDateFrom("");
+        setDateTo("");
+      }
+    }, [dateFrom, dateTo]);
 
-  useEffect(() => {
-    handleDateChange();
-  }, [dateFrom, dateTo]);
+    useEffect(() => {
+      handleDateChange();
+    }, [handleDateChange]);
 
   if (!user) {
     return <p style={{ padding: "2rem" }}>Loading...</p>;
@@ -112,9 +108,11 @@ export default function MainPage() {
           padding: "10px 20px",
         }}
       >
-        <img
+        <Image
           src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
           alt="Logo"
+          width={200}
+          height={75}
           style={{ height: "75px" }}
         />
 
@@ -122,11 +120,13 @@ export default function MainPage() {
           <p style={{ margin: 0 }}>
             {isArabic ? `مرحباً ${user.username} - اسم الشركة` : `Welcome ${user.username} - Company Name`}
           </p>
-          <img
-            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
-            alt="Company Logo"
-            style={{ height: "30px" }}
-          />
+            <Image
+              src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/company-logo.png"
+              alt="Company Logo"
+              width={100}
+              height={30}
+              style={{ height: "30px" }}
+            />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

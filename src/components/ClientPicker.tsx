@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/utils/supabaseClient";
+import { getSupabaseClient } from "@/utils/supabaseClient";
 
 type ClientRow = { id: string; name: string | null; code: string | null };
 
@@ -17,20 +17,25 @@ export default function ClientPicker({
   const [rows, setRows] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let gone = false;
-    async function run() {
-      setLoading(true);
-      const query = supabase.from("client").select("id,name,code").order("name", { ascending: true }).limit(20);
-      const { data } = q
-        ? await query.ilike("name", `%${q}%`)
-        : await query;
-      if (!gone) setRows(data || []);
-      setLoading(false);
-    }
-    run();
-    return () => { gone = true; };
-  }, [q]);
+    useEffect(() => {
+      let gone = false;
+      async function run() {
+        setLoading(true);
+        const supabase = getSupabaseClient();
+        const query = supabase
+          .from("client")
+          .select("id,name,code")
+          .order("name", { ascending: true })
+          .limit(20);
+        const { data } = q
+          ? await query.ilike("name", `%${q}%`)
+          : await query;
+        if (!gone) setRows((data as ClientRow[]) || []);
+        setLoading(false);
+      }
+      run();
+      return () => { gone = true; };
+    }, [q]);
 
   const T = useMemo(() => isArabic ? {p:"اختَر العميل", s:"ابحث بالاسم/الكود"} : {p:"Select client", s:"Search by name/code"}, [isArabic]);
 

@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
-);
-
 type UpsertClient = {
   client_code: string;
   name_ar: string;
@@ -46,6 +41,13 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { clients?: unknown };
     const raw = Array.isArray(body.clients) ? body.clients : [];
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) {
+      return NextResponse.json({ error: "Missing Supabase environment variables" }, { status: 500 });
+    }
+    const supabase = createClient(url, key);
 
     const payload: UpsertClient[] = raw.map((item): UpsertClient => {
       const r = (item ?? {}) as Record<string, unknown>;
