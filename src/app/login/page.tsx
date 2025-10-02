@@ -10,10 +10,9 @@ type PortalUser = {
   role: string;
   username?: string;
   email?: string;
-  auth_user_id?: string; // << أضف دي
+  auth_user_id?: string;
   [key: string]: unknown;
 };
-
 
 /* ===== Icons ===== */
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -43,10 +42,10 @@ export default function LoginPage() {
 
   // ===== Reset Password Modal =====
   const [showResetModal, setShowResetModal] = useState(false);
-const [resetEmail, setResetEmail] = useState("");
-const [resetMsg, setResetMsg] = useState("");
-const [resetLoading, setResetLoading] = useState(false); // NEW
-  
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMsg, setResetMsg] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const toggleLanguage = () => setIsArabic((s: boolean) => !s);
   const toggleTheme = () =>
@@ -85,33 +84,24 @@ const [resetLoading, setResetLoading] = useState(false); // NEW
     } catch {}
   }, []);
 
- // Auto-redirect
-useEffect(() => {
-  const stored = getStoredUser();
-  if (stored) {
-    routeByRole(stored);
-
-    // 👇 لو عامل Remember Me (موجود في localStorage) → نعمل Refresh
-    try {
-      const rememberFlag = localStorage.getItem("rememberMe") === "1";
-      if (rememberFlag) {
-        setTimeout(() => {
-          window.location.reload();
-        }, 300);
-      }
-    } catch {}
-    // داخل useEffect الخاص بالـ auto-redirect:
-const rememberFlag = localStorage.getItem("rememberMe") === "1";
-const didAutoRefresh = sessionStorage.getItem("did_auto_refresh") === "1";
-if (rememberFlag && !didAutoRefresh) {
-  setTimeout(() => {
-    sessionStorage.setItem("did_auto_refresh", "1");
-    window.location.reload();
-  }, 300);
-}
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+  // Auto-redirect + optional one-time refresh if Remember Me
+  useEffect(() => {
+    const stored = getStoredUser();
+    if (stored) {
+      routeByRole(stored);
+      try {
+        const rememberFlag = localStorage.getItem("rememberMe") === "1";
+        const didAutoRefresh = sessionStorage.getItem("did_auto_refresh") === "1";
+        if (rememberFlag && !didAutoRefresh) {
+          setTimeout(() => {
+            sessionStorage.setItem("did_auto_refresh", "1");
+            window.location.reload();
+          }, 300);
+        }
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync remember
   useEffect(() => {
@@ -127,126 +117,122 @@ if (rememberFlag && !didAutoRefresh) {
   }, [rememberMe, username]);
 
   const handleLogin = async () => {
-  setErrorMsg("");
-  setLoading(true);
-  try {
-    const { data, error } = await supabase
-      .from("Users")
-      .select("*")
-      .eq("username", username.trim())
-      .eq("password", password)
-      .single();
-
-    if (error || !data) { setErrorMsg(TEXT.wrong); return; }
-
-    const user = data as PortalUser;
-    const role = String(user.role || "").toLowerCase();
-    const isSuper = role === "super_admin";
-    const isAdmin = role === "admin";
-    if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
-
-    /* ================== [ربط تلقائي مع Supabase Auth] ================== */
+    setErrorMsg("");
+    setLoading(true);
     try {
-      const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
-      // هنربط بس لو مفيش auth_user_id عندنا أصلاً
-      // (لو عندك عمود auth_user_id في الجدول، سيبه كما هو. هنا بس بنحاول نضمن وجود مستخدم في Auth)
-      if (email) {
-        // 1) حاول تعمل sign-in في Auth بنفس الإيميل والباسورد المدخَلين
-        const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      const { data, error } = await supabase
+        .from("Users")
+        .select("*")
+        .eq("username", username.trim())
+        .eq("password", password)
+        .single();
 
-        if (sIn?.user && !sInErr) {
-          // نجح تسجيل الدخول في Auth → اختياري: تحدّث Users.auth_user_id لو عندك العمود ده
-          await supabase
-  .from("Users")
-  .update({ auth_user_id: sIn.user.id })   // << بدون as any
-  .eq("id", user.id);
-        } else {
-          // 2) مفيش يوزر في Auth → اعمل signUp
-          const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
+      if (error || !data) { setErrorMsg(TEXT.wrong); return; }
 
-          if (sUp?.user && !sUpErr) {
-           await supabase
-  .from("Users")
-  .update({ auth_user_id: sUp.user.id })   // << بدون as any
-  .eq("id", user.id);
-          } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
-            // الإيميل موجود في Auth بباسورد مختلف → نكمّل عادي ونخلّي اليوزر يستخدم Forget Password لاحقاً
-            console.warn("Email exists in Auth with a different password. Ask user to reset via 'Forget Password'.");
+      const user = data as PortalUser;
+      const role = String(user.role || "").toLowerCase();
+      const isSuper = role === "super_admin";
+      const isAdmin = role === "admin";
+      if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
+
+      /* ===== Auto-link with Supabase Auth via RPC ===== */
+      try {
+        const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+        if (email) {
+          // 1) حاول تسجيل الدخول في Auth
+          const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (sIn?.user && !sInErr) {
+            const { error: rpcErr } = await supabase.rpc("link_auth_user", {
+              p_user_id: user.id,
+              p_auth_user_id: sIn.user.id,
+            });
+            if (rpcErr) console.error("RPC link_auth_user error (sign-in):", rpcErr);
+          } else {
+            // 2) جرّب إنشاء حساب في Auth
+            const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
+            if (sUp?.user && !sUpErr) {
+              const { error: rpcErr2 } = await supabase.rpc("link_auth_user", {
+                p_user_id: user.id,
+                p_auth_user_id: sUp.user.id,
+              });
+              if (rpcErr2) console.error("RPC link_auth_user error (sign-up):", rpcErr2);
+            } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
+              console.warn("Email exists in Auth with a different password. Ask user to reset via 'Forget Password'.");
+            }
           }
         }
+      } catch (linkErr) {
+        console.warn("Auth link error:", linkErr);
       }
-    } catch (linkErr) {
-      console.warn("Auth link error:", linkErr);
+      /* ===== End auto-link ===== */
+
+      // Save session locally + record user_sessions
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem("currentUser", JSON.stringify(user));
+      storage.setItem("rememberMe", rememberMe ? "1" : "0");
+
+      const sessionKey = crypto.randomUUID();
+      await supabase.from("user_sessions").insert({
+        user_id: user.id,
+        session_key: sessionKey,
+        platform: "web",
+        app_version: "portal-v1",
+      });
+      storage.setItem("session_key", sessionKey);
+
+      if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
+
+      const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
+      router.push(target);
+      setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
+    } finally {
+      setLoading(false);
     }
-    /* ================== [انتهى الربط] ================== */
-
-    // تخزين الجلسة محليًا + تسجيل session
-    const storage = rememberMe ? localStorage : sessionStorage;
-    storage.setItem("currentUser", JSON.stringify(user));
-    storage.setItem("rememberMe", rememberMe ? "1" : "0");
-
-    const sessionKey = crypto.randomUUID();
-    await supabase.from("user_sessions").insert({
-      user_id: user.id, session_key: sessionKey, platform: "web", app_version: "portal-v1",
-    });
-    storage.setItem("session_key", sessionKey);
-
-    if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
-
-    const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
-    router.push(target);
-    setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   const handleResetPassword = async () => {
-  setResetMsg("");
-  const email = resetEmail.trim();
+    setResetMsg("");
+    const email = resetEmail.trim();
 
-  // تحقق من صيغة الإيميل
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!emailOk) {
-    setResetMsg(isArabic ? "صيغة البريد غير صحيحة" : "Invalid email format");
-    return;
-  }
-
-  setResetLoading(true);
-  try {
-    // 1) نتأكد إن الإيميل موجود في جدول Users ومربوط بـ auth_user_id
-    const { data: u, error: uErr } = await supabase
-      .from("Users")
-      .select("id, auth_user_id")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (uErr || !u || !u.auth_user_id) {
-      setResetMsg(isArabic ? "البريد غير مسجّل" : "Email not exits");
+    // تحقق من صيغة الإيميل
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailOk) {
+      setResetMsg(isArabic ? "صيغة البريد غير صحيحة" : "Invalid email format");
       return;
     }
 
-    // 2) ابعت لينك إعادة التعيين من Supabase Auth
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/update-password",
-    });
-    if (error) {
-      setResetMsg(error.message);
-    } else {
-      setResetMsg(
-        isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent"
-      );
+    setResetLoading(true);
+    try {
+      // تأكد أن الإيميل موجود ومربوط بـ auth_user_id
+      const { data: u, error: uErr } = await supabase
+        .from("Users")
+        .select("id, auth_user_id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (uErr || !u || !u.auth_user_id) {
+        setResetMsg(isArabic ? "البريد غير مسجّل" : "Email not found");
+        return;
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/update-password",
+      });
+      if (error) {
+        setResetMsg(error.message);
+      } else {
+        setResetMsg(isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent");
+      }
+    } catch (err: unknown) {
+      setResetMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setResetLoading(false);
     }
-  } catch (err: unknown) {
-    setResetMsg(err instanceof Error ? err.message : String(err));
-  } finally {
-    setResetLoading(false);
-  }
-};
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleLogin(); };
   const LOGO = "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
@@ -443,109 +429,108 @@ if (rememberFlag && !didAutoRefresh) {
 
       {/* Reset Password Modal */}
       {showResetModal && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 50,
-    }}
-    role="dialog"
-    aria-modal="true"
-  >
-    <div
-      style={{
-        background: "#111",          // داكن
-        color: "#fff",               // نص أبيض
-        padding: 20,
-        borderRadius: 8,
-        width: 360,
-        boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        textAlign: "center",
-      }}
-    >
-      <h3 style={{ marginBottom: 12 }}>
-        {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
-      </h3>
-
-      <input
-        type="email"
-        placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
-        value={resetEmail}
-        onChange={(e) => setResetEmail(e.target.value)}
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          margin: "10px 0 6px",
-          borderRadius: 6,
-          border: "1px solid rgba(255,255,255,0.2)",
-          background: "rgba(255,255,255,0.08)",
-          color: "#fff",
-          outline: "none",
-        }}
-      />
-
-      {resetMsg && (
-        <p
+        <div
           style={{
-            margin: "6px 0 10px",
-            fontSize: "0.9rem",
-            color: resetMsg.includes("sent") || resetMsg.includes("تم")
-              ? "#22c55e" // أخضر للنجاح
-              : "#ef4444", // أحمر للخطأ
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 50,
           }}
+          role="dialog"
+          aria-modal="true"
         >
-          {resetMsg}
-        </p>
+          <div
+            style={{
+              background: "#111",
+              color: "#fff",
+              padding: 20,
+              borderRadius: 8,
+              width: 360,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginBottom: 12 }}>
+              {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
+            </h3>
+
+            <input
+              type="email"
+              placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                margin: "10px 0 6px",
+                borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                outline: "none",
+              }}
+            />
+
+            {resetMsg && (
+              <p
+                style={{
+                  margin: "6px 0 10px",
+                  fontSize: "0.9rem",
+                  color: resetMsg.includes("sent") || resetMsg.includes("تم")
+                    ? "#22c55e" // success
+                    : "#ef4444", // error
+                }}
+              >
+                {resetMsg}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <button
+                onClick={handleResetPassword}
+                disabled={resetLoading}
+                style={{
+                  flex: 1,
+                  background: "#f5a623", // Send
+                  color: "#000",
+                  border: "none",
+                  padding: "10px 0",
+                  borderRadius: 6,
+                  fontWeight: "bold",
+                  cursor: resetLoading ? "not-allowed" : "pointer",
+                  opacity: resetLoading ? 0.6 : 1,
+                }}
+              >
+                {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetEmail("");
+                  setResetMsg("");
+                }}
+                style={{
+                  flex: 1,
+                  background: "#ef4444", // Cancel
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 0",
+                  borderRadius: 6,
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                {isArabic ? "إلغاء" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-
-      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-        <button
-          onClick={handleResetPassword}
-          disabled={resetLoading}
-          style={{
-            flex: 1,
-            background: "#f5a623",     // Send نفس الهوية
-            color: "#000",
-            border: "none",
-            padding: "10px 0",
-            borderRadius: 6,
-            fontWeight: "bold",
-            cursor: resetLoading ? "not-allowed" : "pointer",
-            opacity: resetLoading ? 0.6 : 1,
-          }}
-        >
-          {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
-        </button>
-
-        <button
-          onClick={() => {
-            setShowResetModal(false);
-            setResetEmail("");
-            setResetMsg("");
-          }}
-          style={{
-            flex: 1,
-            background: "#ef4444",     // Cancel أحمر
-            color: "#fff",
-            border: "none",
-            padding: "10px 0",
-            borderRadius: 6,
-            fontWeight: "bold",
-            cursor: "pointer",
-          }}
-        >
-          {isArabic ? "إلغاء" : "Cancel"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
     </div>
   );
 }
