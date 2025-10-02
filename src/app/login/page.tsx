@@ -11,6 +11,7 @@ type PortalUser = {
   username?: string;
   email?: string;
   auth_user_id?: string;
+  password?: string | null;
   [key: string]: unknown;
 };
 
@@ -55,7 +56,10 @@ export default function LoginPage() {
       return next;
     });
 
-  const TEXT = { wrong: isArabic ? "البيانات غلط" : "Invalid username or password" };
+  const TEXT = {
+    wrong: isArabic ? "بيانات غير صحيحة" : "Invalid username or password",
+    forbidden: isArabic ? "غير مسموح لك باستخدام البوابة" : "You are not allowed to use this portal",
+  };
 
   function getStoredUser(): PortalUser | null {
     try {
@@ -120,68 +124,83 @@ export default function LoginPage() {
     setErrorMsg("");
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1) نجيب المستخدم باليوزر نيم (ونقرأ password للـ fallback)
+      const { data: user, error: uErr } = await supabase
         .from("Users")
-        .select("*")
+        .select("id, role, username, email, auth_user_id, password")
         .eq("username", username.trim())
-        .eq("password", password)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) { setErrorMsg(TEXT.wrong); return; }
+      if (uErr || !user) { setErrorMsg(TEXT.wrong); return; }
 
-      const user = data as PortalUser;
+      // 2) السماح فقط لأدوار Admin/Super_Admin
       const role = String(user.role || "").toLowerCase();
       const isSuper = role === "super_admin";
       const isAdmin = role === "admin";
-      if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
+      if (!isSuper && !isAdmin) { setErrorMsg(TEXT.forbidden); return; }
 
-      /* ===== Auto-link with Supabase Auth via RPC ===== */
-try {
-  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
-  console.log("[AUTH-LINK] using email:", email); // 🔍
+      // 3) نحاول عبر Supabase Auth لو فيه auth_user_id، وإلا نرجع للـ Users.password
+      const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+      let signedIn = false;
+      let authUserId: string | null = null;
 
-  if (email) {
-    // 1) Sign In
-    const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    console.log("[AUTH-LINK] signIn error:", sInErr);
-    console.log("[AUTH-LINK] signIn user:", sIn?.user?.id);
+      if (user.auth_user_id && email) {
+        // طريق Supabase Auth
+        const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (!sInErr && sIn?.user) {
+          signedIn = true;
+          authUserId = sIn.user.id;
+        } else {
+          // عنده auth_user_id بس كلمة المرور غلط
+          setErrorMsg(TEXT.wrong);
+          return;
+        }
+      } else {
+        // Fallback: جدول Users
+        const tablePwd = typeof user.password === "string" ? user.password : "";
+        if (tablePwd && password && tablePwd === password) {
+          signedIn = true;
 
-    if (sIn?.user && !sInErr) {
-      const { error: rpcErr } = await supabase.rpc("link_auth_user", {
-        p_user_id: user.id,
-        p_auth_user_id: sIn.user.id,
-      });
-      console.log("[AUTH-LINK] rpc (sign-in) error:", rpcErr);
-    } else {
-      // 2) Sign Up
-      const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
-      console.log("[AUTH-LINK] signUp error:", sUpErr);
-      console.log("[AUTH-LINK] signUp user:", sUp?.user?.id);
+          // محاولة ربط تلقائي (اختياري): نحاول نعمل signIn أو signUp في Supabase وربط auth_user_id
+          if (email) {
+            try {
+              const { data: sIn2, error: sInErr2 } = await supabase.auth.signInWithPassword({ email, password });
+              if (sIn2?.user && !sInErr2) authUserId = sIn2.user.id;
+              else {
+                const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
+                if (sUp?.user && !sUpErr) authUserId = sUp.user.id;
+              }
 
-      if (sUp?.user && !sUpErr) {
-        const { error: rpcErr2 } = await supabase.rpc("link_auth_user", {
-          p_user_id: user.id,
-          p_auth_user_id: sUp.user.id,
-        });
-        console.log("[AUTH-LINK] rpc (sign-up) error:", rpcErr2);
-      } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
-        console.warn("[AUTH-LINK] email exists with different password → ask for reset");
+              if (authUserId) {
+                const { error: rpcErr } = await supabase.rpc("link_auth_user", {
+                  p_user_id: user.id,
+                  p_auth_user_id: authUserId,
+                });
+                if (rpcErr) console.warn("[AUTH-LINK] rpc error:", rpcErr);
+              }
+            } catch (linkErr) {
+              console.warn("[AUTH-LINK] unexpected:", linkErr);
+            }
+          }
+        } else {
+          setErrorMsg(TEXT.wrong);
+          return;
+        }
       }
-    }
-  } else {
-    console.warn("[AUTH-LINK] user has NO email in Users table — skipping auth link.");
-  }
-} catch (linkErr) {
-  console.warn("[AUTH-LINK] unexpected error:", linkErr);
-}
-/* ===== End auto-link ===== */
 
-      // Save session locally + record user_sessions
+      if (!signedIn) { setErrorMsg(TEXT.wrong); return; }
+
+      // 4) حفظ الجلسة المحلية + user_sessions
+      const safeUser: PortalUser = {
+        id: user.id,
+        role: user.role,
+        username: user.username,
+        email: user.email,
+        auth_user_id: user.auth_user_id || authUserId || undefined,
+      };
+
       const storage = rememberMe ? localStorage : sessionStorage;
-      storage.setItem("currentUser", JSON.stringify(user));
+      storage.setItem("currentUser", JSON.stringify(safeUser));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
       const sessionKey = crypto.randomUUID();
@@ -490,8 +509,8 @@ try {
                   margin: "6px 0 10px",
                   fontSize: "0.9rem",
                   color: resetMsg.includes("sent") || resetMsg.includes("تم")
-                    ? "#22c55e" // success
-                    : "#ef4444", // error
+                    ? "#22c55e"
+                    : "#ef4444",
                 }}
               >
                 {resetMsg}
@@ -504,7 +523,7 @@ try {
                 disabled={resetLoading}
                 style={{
                   flex: 1,
-                  background: "#f5a623", // Send
+                  background: "#f5a623",
                   color: "#000",
                   border: "none",
                   padding: "10px 0",
@@ -525,7 +544,7 @@ try {
                 }}
                 style={{
                   flex: 1,
-                  background: "#ef4444", // Cancel
+                  background: "#ef4444",
                   color: "#fff",
                   border: "none",
                   padding: "10px 0",
