@@ -11,6 +11,22 @@ type PortalUser = {
   [key: string]: unknown;
 };
 
+// SVG Icons للعين
+const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
+    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
+  </svg>
+);
+
+const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
+    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8"/>
+    <path d="M10.58 5.08A11.5 11.5 0 0 1 12 5c6.5 0 10 6 10 6a18.6 18.6 0 0 1-4.11 4.59M6.11 8.41A18.6 18.6 0 0 0 2 11s3.5 6 10 6c1.13 0 2.2-.18 3.2-.5" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
+  </svg>
+);
+
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
   const [username, setUsername] = useState("");
@@ -23,7 +39,7 @@ export default function LoginPage() {
 
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
-  const toggleLanguage = () => setIsArabic((s) => !s);
+  const toggleLanguage = () => setIsArabic((s: boolean) => !s);
 
   const TEXT = {
     wrong: isArabic ? "البيانات غلط" : "Invalid username or password",
@@ -129,7 +145,6 @@ export default function LoginPage() {
       router.push(target);
       setTimeout(() => {
         try {
-          // Next.js App Router: force data re-fetch after navigation
           window.location.reload();
         } catch {}
       }, 150);
@@ -142,11 +157,14 @@ export default function LoginPage() {
     if (e.key === "Enter") handleLogin();
   };
 
+  const LOGO =
+    "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
+
   return (
     <div
       style={{
         backgroundImage:
-          "url('https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//bg.jpg')",
+          "url('https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         minHeight: "100vh",
@@ -163,14 +181,14 @@ export default function LoginPage() {
           padding: "10px 20px",
         }}
       >
-       <Image
-  src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png"
-  alt="Tactic Logo"
-  width={200}
-  height={75}
-  style={{ height: "75px", width: "auto" }}
-  priority
-/>
+        <Image
+          src={LOGO}
+          alt="Tactic Logo"
+          width={200}
+          height={75}
+          style={{ height: "75px", width: "auto" }}
+          priority
+        />
 
         <div style={{ display: "flex", gap: "10px" }}>
           <a
@@ -225,17 +243,17 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-         <Image
-  src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png"
-  alt="Tactic Logo"
-  width={200}
-  height={80}
-  style={{
-    width: "200px",
-    margin: "0 auto 20px auto",
-    display: "block",
-  }}
-/>
+          <Image
+            src={LOGO}
+            alt="Tactic Logo"
+            width={200}
+            height={80}
+            style={{
+              width: "200px",
+              margin: "0 auto 20px auto",
+              display: "block",
+            }}
+          />
           <h2 style={{ color: "white", marginBottom: "1rem", whiteSpace: "pre-line" }}>
             {isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in"}
           </h2>
@@ -269,36 +287,41 @@ export default function LoginPage() {
               style={{
                 display: "block",
                 width: "100%",
-                padding: "10px 42px 10px 10px",
-                borderRadius: "4px",
-                border: "none",
+                padding: "10px 44px 10px 12px",
+                borderRadius: "6px",
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                outline: "none",
               }}
               autoComplete="current-password"
             />
             <button
               type="button"
               onClick={() => {
-                setShowPassword((s) => !s);
-                // keep focus on input
+                setShowPassword((s: boolean) => !s);
                 passwordInputRef.current?.focus();
               }}
               aria-label={showPassword ? "Hide password" : "Show password"}
               title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
               style={{
                 position: "absolute",
-                right: "8px",
+                right: "10px",
                 top: "50%",
                 transform: "translateY(-50%)",
                 border: "none",
                 background: "transparent",
                 cursor: "pointer",
-                fontSize: "1.1rem",
-                lineHeight: 1,
-                padding: "4px",
-                color: "#999",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#d1d5db",
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#d1d5db")}
             >
-              {showPassword ? "🙈" : "👁️"}
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
 
