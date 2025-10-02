@@ -41,9 +41,10 @@ export default function LoginPage() {
 
   // ===== Reset Password Modal =====
   const [showResetModal, setShowResetModal] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetMsg, setResetMsg] = useState("");
-
+const [resetEmail, setResetEmail] = useState("");
+const [resetMsg, setResetMsg] = useState("");
+const [resetLoading, setResetLoading] = useState(false); // NEW
+  
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const toggleLanguage = () => setIsArabic((s: boolean) => !s);
   const toggleTheme = () =>
@@ -154,18 +155,47 @@ useEffect(() => {
   };
 
   const handleResetPassword = async () => {
-    setResetMsg("");
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-        redirectTo: window.location.origin + "/update-password",
-      });
-      if (error) setResetMsg(error.message);
-      else setResetMsg(isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent");
-    } catch (err: unknown) {
-  if (err instanceof Error) setResetMsg(err.message);
-  else setResetMsg(String(err));
-}
-  };
+  setResetMsg("");
+  const email = resetEmail.trim();
+
+  // تحقق من صيغة الإيميل
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!emailOk) {
+    setResetMsg(isArabic ? "صيغة البريد غير صحيحة" : "Invalid email format");
+    return;
+  }
+
+  setResetLoading(true);
+  try {
+    // 1) نتأكد إن الإيميل موجود في جدول Users ومربوط بـ auth_user_id
+    const { data: u, error: uErr } = await supabase
+      .from("Users")
+      .select("id, auth_user_id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (uErr || !u || !u.auth_user_id) {
+      setResetMsg(isArabic ? "البريد غير مسجّل" : "Email not found");
+      return;
+    }
+
+    // 2) ابعت لينك إعادة التعيين من Supabase Auth
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/update-password",
+    });
+    if (error) {
+      setResetMsg(error.message);
+    } else {
+      setResetMsg(
+        isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent"
+      );
+    }
+  } catch (err: unknown) {
+    setResetMsg(err instanceof Error ? err.message : String(err));
+  } finally {
+    setResetLoading(false);
+  }
+};
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleLogin(); };
   const LOGO = "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
@@ -362,34 +392,109 @@ useEffect(() => {
 
       {/* Reset Password Modal */}
       {showResetModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center" }}>
-          <div style={{ background: "#fff", padding: "20px", borderRadius: "8px", width: "320px", textAlign: "center" }}>
-            <h3>{isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}</h3>
-            <input
-              type="email"
-              placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
-              value={resetEmail}
-              onChange={(e) => setResetEmail(e.target.value)}
-              style={{ width: "100%", padding: "10px", margin: "10px 0", borderRadius: "4px", border: "1px solid #ccc" }}
-            />
-            {resetMsg && <p style={{ color: "red", fontSize: "0.9rem" }}>{resetMsg}</p>}
-            <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-              <button
-                onClick={handleResetPassword}
-                style={{ flex: 1, background: "#f5a623", border: "none", padding: "8px", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" }}
-              >
-                {isArabic ? "إرسال" : "Send"}
-              </button>
-              <button
-                onClick={() => setShowResetModal(false)}
-                style={{ flex: 1, background: "#999", border: "none", padding: "8px", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" }}
-              >
-                {isArabic ? "إلغاء" : "Cancel"}
-              </button>
-            </div>
-          </div>
-        </div>
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 50,
+    }}
+    role="dialog"
+    aria-modal="true"
+  >
+    <div
+      style={{
+        background: "#111",          // داكن
+        color: "#fff",               // نص أبيض
+        padding: 20,
+        borderRadius: 8,
+        width: 360,
+        boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        textAlign: "center",
+      }}
+    >
+      <h3 style={{ marginBottom: 12 }}>
+        {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
+      </h3>
+
+      <input
+        type="email"
+        placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
+        value={resetEmail}
+        onChange={(e) => setResetEmail(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          margin: "10px 0 6px",
+          borderRadius: 6,
+          border: "1px solid rgba(255,255,255,0.2)",
+          background: "rgba(255,255,255,0.08)",
+          color: "#fff",
+          outline: "none",
+        }}
+      />
+
+      {resetMsg && (
+        <p
+          style={{
+            margin: "6px 0 10px",
+            fontSize: "0.9rem",
+            color: resetMsg.includes("sent") || resetMsg.includes("تم")
+              ? "#22c55e" // أخضر للنجاح
+              : "#ef4444", // أحمر للخطأ
+          }}
+        >
+          {resetMsg}
+        </p>
       )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <button
+          onClick={handleResetPassword}
+          disabled={resetLoading}
+          style={{
+            flex: 1,
+            background: "#f5a623",     // Send نفس الهوية
+            color: "#000",
+            border: "none",
+            padding: "10px 0",
+            borderRadius: 6,
+            fontWeight: "bold",
+            cursor: resetLoading ? "not-allowed" : "pointer",
+            opacity: resetLoading ? 0.6 : 1,
+          }}
+        >
+          {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
+        </button>
+
+        <button
+          onClick={() => {
+            setShowResetModal(false);
+            setResetEmail("");
+            setResetMsg("");
+          }}
+          style={{
+            flex: 1,
+            background: "#ef4444",     // Cancel أحمر
+            color: "#fff",
+            border: "none",
+            padding: "10px 0",
+            borderRadius: 6,
+            fontWeight: "bold",
+            cursor: "pointer",
+          }}
+        >
+          {isArabic ? "إلغاء" : "Cancel"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
