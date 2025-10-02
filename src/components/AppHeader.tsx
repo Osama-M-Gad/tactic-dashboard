@@ -20,6 +20,7 @@ export default function AppHeader({
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
+    // أخفي اللوجو لو الصورة مش متاحة
     e.currentTarget.style.display = "none";
   };
 
@@ -70,7 +71,7 @@ export default function AppHeader({
       }}
     >
       <Image
-        src="/logo.png"
+        src="/logo.png"            // تأكد أنه موجود في public/logo.png
         alt="Tactic Portal"
         width={120}
         height={40}
