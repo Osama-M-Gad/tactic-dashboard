@@ -4,14 +4,16 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 import Image from "next/image";
 
+/* ===== Types ===== */
 type PortalUser = {
   id: string;
   role: string;
   username?: string;
+  email?: string;
   [key: string]: unknown;
 };
 
-// SVG Icons
+/* ===== Icons ===== */
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8"/>
@@ -28,6 +30,7 @@ const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,13 +39,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // ===== Reset Password Modal =====
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMsg, setResetMsg] = useState("");
+
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
-
   const toggleLanguage = () => setIsArabic((s: boolean) => !s);
+  const toggleTheme = () =>
+    setIsDark((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("theme", next ? "dark" : "light"); } catch {}
+      return next;
+    });
 
-  const TEXT = {
-    wrong: isArabic ? "البيانات غلط" : "Invalid username or password",
-  };
+  const TEXT = { wrong: isArabic ? "البيانات غلط" : "Invalid username or password" };
 
   function getStoredUser(): PortalUser | null {
     try {
@@ -51,35 +62,46 @@ export default function LoginPage() {
       const ss = typeof window !== "undefined" ? sessionStorage.getItem("currentUser") : null;
       if (ss) return JSON.parse(ss) as PortalUser;
       return null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
-
   function routeByRole(user: PortalUser) {
     const role = String(user?.role || "").toLowerCase();
     if (role === "super_admin") router.replace("/super-admin/dashboard");
     else if (role === "admin") router.replace("/admin/dashboard");
   }
 
-  // Prefill username & rememberMe
+  // Prefill username/remember + Theme
   useEffect(() => {
     try {
       const remembered = localStorage.getItem("rememberedUsername");
       const rememberFlag = localStorage.getItem("rememberMe") === "1";
+      const savedTheme = localStorage.getItem("theme");
       if (remembered) setUsername(remembered);
       setRememberMe(rememberFlag);
+      if (savedTheme) setIsDark(savedTheme === "dark");
     } catch {}
   }, []);
 
-  // Auto-redirect if already signed in
-  useEffect(() => {
-    const stored = getStoredUser();
-    if (stored) routeByRole(stored);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+ // Auto-redirect
+useEffect(() => {
+  const stored = getStoredUser();
+  if (stored) {
+    routeByRole(stored);
 
-  // Sync rememberMe + username to storage (username only, no passwords)
+    // 👇 لو عامل Remember Me (موجود في localStorage) → نعمل Refresh
+    try {
+      const rememberFlag = localStorage.getItem("rememberMe") === "1";
+      if (rememberFlag) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      }
+    } catch {}
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+  // Sync remember
   useEffect(() => {
     try {
       if (rememberMe && username.trim()) {
@@ -95,7 +117,6 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setErrorMsg("");
     setLoading(true);
-
     try {
       const { data, error } = await supabase
         .from("Users")
@@ -104,19 +125,13 @@ export default function LoginPage() {
         .eq("password", password)
         .single();
 
-      if (error || !data) {
-        setErrorMsg(TEXT.wrong);
-        return;
-      }
+      if (error || !data) { setErrorMsg(TEXT.wrong); return; }
 
       const user = data as unknown as PortalUser;
       const role = String(user.role || "").toLowerCase();
       const isSuper = role === "super_admin";
       const isAdmin = role === "admin";
-      if (!isSuper && !isAdmin) {
-        setErrorMsg(TEXT.wrong);
-        return;
-      }
+      if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
 
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem("currentUser", JSON.stringify(user));
@@ -124,37 +139,36 @@ export default function LoginPage() {
 
       const sessionKey = crypto.randomUUID();
       await supabase.from("user_sessions").insert({
-        user_id: user.id,
-        session_key: sessionKey,
-        platform: "web",
-        app_version: "portal-v1",
+        user_id: user.id, session_key: sessionKey, platform: "web", app_version: "portal-v1",
       });
       storage.setItem("session_key", sessionKey);
 
-      if (rememberMe) {
-        try {
-          localStorage.setItem("rememberedUsername", username.trim());
-        } catch {}
-      }
+      if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
 
       const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
       router.push(target);
-      setTimeout(() => {
-        try {
-          window.location.reload();
-        } catch {}
-      }, 150);
+      setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
     } finally {
       setLoading(false);
     }
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleLogin();
+  const handleResetPassword = async () => {
+    setResetMsg("");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo: window.location.origin + "/update-password",
+      });
+      if (error) setResetMsg(error.message);
+      else setResetMsg(isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent");
+    } catch (err: unknown) {
+  if (err instanceof Error) setResetMsg(err.message);
+  else setResetMsg(String(err));
+}
   };
 
-  const LOGO =
-    "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleLogin(); };
+  const LOGO = "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
 
   return (
     <div
@@ -170,7 +184,7 @@ export default function LoginPage() {
       <div
         style={{
           width: "100%",
-          backgroundColor: "rgba(0,0,0,0.8)",
+          backgroundColor: isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -193,28 +207,28 @@ export default function LoginPage() {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              backgroundColor: "#f5a623",
-              color: "#000",
-              padding: "8px 12px",
-              borderRadius: "4px",
-              textDecoration: "none",
-              fontWeight: "bold",
-              fontSize: "0.9rem",
+              backgroundColor: "#f5a623", color: "#000", padding: "8px 12px",
+              borderRadius: "4px", textDecoration: "none", fontWeight: "bold", fontSize: "0.9rem",
             }}
           >
             {isArabic ? "الموقع التعريفي" : "Company Site"}
           </a>
+
+          <button
+            onClick={toggleTheme}
+            style={{
+              backgroundColor: "#f5a623", color: "#000", padding: "8px 12px",
+              border: "none", borderRadius: "4px", fontWeight: "bold", fontSize: "0.9rem", cursor: "pointer",
+            }}
+          >
+            {isDark ? (isArabic ? "وضع فاتح" : "Light") : (isArabic ? "وضع داكن" : "Dark")}
+          </button>
+
           <button
             onClick={toggleLanguage}
             style={{
-              backgroundColor: "#f5a623",
-              color: "#000",
-              padding: "8px 12px",
-              border: "none",
-              borderRadius: "4px",
-              fontWeight: "bold",
-              fontSize: "0.9rem",
-              cursor: "pointer",
+              backgroundColor: "#f5a623", color: "#000", padding: "8px 12px",
+              border: "none", borderRadius: "4px", fontWeight: "bold", fontSize: "0.9rem", cursor: "pointer",
             }}
           >
             {isArabic ? "EN" : "AR"}
@@ -225,19 +239,15 @@ export default function LoginPage() {
       {/* Body */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
+          display: "flex", justifyContent: "center", alignItems: "center",
           minHeight: "calc(100vh - 60px)",
         }}
       >
         <div
           style={{
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
-            padding: "2rem",
-            borderRadius: "8px",
-            width: "350px",
-            textAlign: "center",
+            backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(255,255,255,0.9)",
+            padding: "2rem", borderRadius: "8px", width: "350px", textAlign: "center",
+            color: isDark ? "#fff" : "#000",
           }}
         >
           <Image
@@ -245,15 +255,11 @@ export default function LoginPage() {
             alt="Tactic Logo"
             width={200}
             height={80}
-            style={{
-              width: "200px",
-              margin: "0 auto 20px auto",
-              display: "block",
-            }}
+            style={{ width: "200px", margin: "0 auto 20px auto", display: "block" }}
             unoptimized
           />
 
-          <h2 style={{ color: "white", marginBottom: "1rem", whiteSpace: "pre-line" }}>
+          <h2 style={{ marginBottom: "1rem", whiteSpace: "pre-line" }}>
             {isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in"}
           </h2>
 
@@ -265,15 +271,11 @@ export default function LoginPage() {
             onChange={(e) => setUsername(e.target.value)}
             onKeyDown={onKeyDown}
             style={{
-              display: "block",
-              width: "100%",
-              padding: "10px",
-              marginBottom: "1rem",
+              display: "block", width: "100%", padding: "10px", marginBottom: "1rem",
               borderRadius: "6px",
-              border: "1px solid rgba(0,0,0,0.15)",
-              background: "#fff",
-              color: "#111",
-              outline: "none",
+              border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
+              background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
+              color: isDark ? "#fff" : "#111", outline: "none",
             }}
             autoComplete="username"
           />
@@ -288,14 +290,11 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={onKeyDown}
               style={{
-                display: "block",
-                width: "100%",
-                padding: "10px 44px 10px 12px",
+                display: "block", width: "100%", padding: "10px 44px 10px 12px",
                 borderRadius: "6px",
-                border: "1px solid rgba(0,0,0,0.15)",
-                background: "#fff",
-                color: "#111",
-                outline: "none",
+                border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
+                background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
+                color: isDark ? "#fff" : "#111", outline: "none",
               }}
               autoComplete="current-password"
             />
@@ -308,21 +307,13 @@ export default function LoginPage() {
               aria-label={showPassword ? "Hide password" : "Show password"}
               title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
               style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#666",
+                position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                border: "none", background: "transparent", cursor: "pointer", padding: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: isDark ? "#d1d5db" : "#666",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#000")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = isDark ? "#d1d5db" : "#666")}
             >
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
@@ -330,12 +321,9 @@ export default function LoginPage() {
 
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-              color: "white",
-              fontSize: "0.9rem",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              marginBottom: "1rem", fontSize: "0.9rem",
+              color: isDark ? "#fff" : "#000",
             }}
           >
             <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -346,7 +334,11 @@ export default function LoginPage() {
               />
               {isArabic ? "تذكرني" : "Remember me"}
             </label>
-            <a href="#" style={{ color: "#f5a623", textDecoration: "none" }}>
+            <a
+              href="#"
+              onClick={() => setShowResetModal(true)}
+              style={{ color: "#f5a623", textDecoration: "none" }}
+            >
               {isArabic ? "نسيت كلمة المرور؟" : "Forget Password?"}
             </a>
           </div>
@@ -357,26 +349,47 @@ export default function LoginPage() {
             onClick={handleLogin}
             disabled={loading}
             style={{
-              backgroundColor: loading ? "#999" : "#f5a623",
-              color: "#000",
-              padding: "10px",
-              width: "100%",
-              border: "none",
-              borderRadius: "4px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
+              backgroundColor: "#f5a623", color: "#000", padding: "10px", width: "100%",
+              border: "none", borderRadius: "4px", fontWeight: "bold",
+              cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1,
             }}
           >
-            {loading
-              ? isArabic
-                ? "جارٍ تسجيل الدخول..."
-                : "Signing in..."
-              : isArabic
-              ? "تسجيل الدخول"
-              : "Sign in"}
+            {loading ? (isArabic ? "جارٍ تسجيل الدخول..." : "Signing in...") :
+              (isArabic ? "تسجيل الدخول" : "Sign in")}
           </button>
         </div>
       </div>
+
+      {/* Reset Password Modal */}
+      {showResetModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div style={{ background: "#fff", padding: "20px", borderRadius: "8px", width: "320px", textAlign: "center" }}>
+            <h3>{isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}</h3>
+            <input
+              type="email"
+              placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              style={{ width: "100%", padding: "10px", margin: "10px 0", borderRadius: "4px", border: "1px solid #ccc" }}
+            />
+            {resetMsg && <p style={{ color: "red", fontSize: "0.9rem" }}>{resetMsg}</p>}
+            <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+              <button
+                onClick={handleResetPassword}
+                style={{ flex: 1, background: "#f5a623", border: "none", padding: "8px", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                {isArabic ? "إرسال" : "Send"}
+              </button>
+              <button
+                onClick={() => setShowResetModal(false)}
+                style={{ flex: 1, background: "#999", border: "none", padding: "8px", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                {isArabic ? "إلغاء" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { logout } from "@/utils/session";
-
+import Image from "next/image";
 type Props = {
   isArabic: boolean;
   onToggleLang: () => void;
@@ -29,11 +29,14 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
         padding: "10px 20px",
       }}
     >
-      <img
-        src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-        alt="Tactic Logo"
-        style={{ height: "75px" }}
-      />
+      <Image
+  src="/logo.png"
+  alt="Logo"
+  width={120}
+  height={40}
+  style={{ height: "40px", width: "auto" }}
+  unoptimized // لو الصورة جاية من Supabase Storage أو CDN خارجي
+/>
 
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <Link
