@@ -136,39 +136,48 @@ export default function LoginPage() {
       if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
 
       /* ===== Auto-link with Supabase Auth via RPC ===== */
-      try {
-        const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
-        if (email) {
-          // 1) حاول تسجيل الدخول في Auth
-          const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+try {
+  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  console.log("[AUTH-LINK] using email:", email); // 🔍
 
-          if (sIn?.user && !sInErr) {
-            const { error: rpcErr } = await supabase.rpc("link_auth_user", {
-              p_user_id: user.id,
-              p_auth_user_id: sIn.user.id,
-            });
-            if (rpcErr) console.error("RPC link_auth_user error (sign-in):", rpcErr);
-          } else {
-            // 2) جرّب إنشاء حساب في Auth
-            const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
-            if (sUp?.user && !sUpErr) {
-              const { error: rpcErr2 } = await supabase.rpc("link_auth_user", {
-                p_user_id: user.id,
-                p_auth_user_id: sUp.user.id,
-              });
-              if (rpcErr2) console.error("RPC link_auth_user error (sign-up):", rpcErr2);
-            } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
-              console.warn("Email exists in Auth with a different password. Ask user to reset via 'Forget Password'.");
-            }
-          }
-        }
-      } catch (linkErr) {
-        console.warn("Auth link error:", linkErr);
+  if (email) {
+    // 1) Sign In
+    const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    console.log("[AUTH-LINK] signIn error:", sInErr);
+    console.log("[AUTH-LINK] signIn user:", sIn?.user?.id);
+
+    if (sIn?.user && !sInErr) {
+      const { error: rpcErr } = await supabase.rpc("link_auth_user", {
+        p_user_id: user.id,
+        p_auth_user_id: sIn.user.id,
+      });
+      console.log("[AUTH-LINK] rpc (sign-in) error:", rpcErr);
+    } else {
+      // 2) Sign Up
+      const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
+      console.log("[AUTH-LINK] signUp error:", sUpErr);
+      console.log("[AUTH-LINK] signUp user:", sUp?.user?.id);
+
+      if (sUp?.user && !sUpErr) {
+        const { error: rpcErr2 } = await supabase.rpc("link_auth_user", {
+          p_user_id: user.id,
+          p_auth_user_id: sUp.user.id,
+        });
+        console.log("[AUTH-LINK] rpc (sign-up) error:", rpcErr2);
+      } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
+        console.warn("[AUTH-LINK] email exists with different password → ask for reset");
       }
-      /* ===== End auto-link ===== */
+    }
+  } else {
+    console.warn("[AUTH-LINK] user has NO email in Users table — skipping auth link.");
+  }
+} catch (linkErr) {
+  console.warn("[AUTH-LINK] unexpected error:", linkErr);
+}
+/* ===== End auto-link ===== */
 
       // Save session locally + record user_sessions
       const storage = rememberMe ? localStorage : sessionStorage;
