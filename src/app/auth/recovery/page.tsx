@@ -3,63 +3,79 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/utils/supabaseClient";
 
 export default function RecoveryPage() {
-  const [phase, setPhase] = useState<"verifying" | "ready" | "updating" | "done" | "error">("verifying");
+  type Phase = "verifying" | "ready" | "updating" | "done" | "error";
+  const [phase, setPhase] = useState<Phase>("verifying");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState("");
 
+  // مانع الأحرف العربية + الأرقام العربية
+  const containsArabic = (s: string) =>
+    /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0660-\u0669\u06F0-\u06F9]/.test(s);
+
   useEffect(() => {
-  const run = async () => {
-    try {
-      const url = new URL(window.location.href);
-      const query = new URLSearchParams(url.search);
-      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const run = async () => {
+      try {
+        const url = new URL(window.location.href);
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+        const access_token = hash.get("access_token");
+        const refresh_token = hash.get("refresh_token");
 
-      const code = query.get("code");
-      const accessToken = hash.get("access_token");
-      const refreshToken = hash.get("refresh_token");
+        if (!access_token || !refresh_token) {
+          throw new Error("Invalid reset link. No tokens found.");
+        }
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) throw error;
-      } else if (accessToken && refreshToken) {
         const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+          access_token,
+          refresh_token,
         });
         if (error) throw error;
-      } else {
-        throw new Error("Invalid link. No auth code or tokens found.");
-      }
 
-      const cleanUrl = url.origin + url.pathname;
-      window.history.replaceState({}, "", cleanUrl);
-      setPhase("ready");
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      setMsg(message || "Invalid or expired link.");
-      setPhase("error");
+        // نظّف الهاش من الـ URL
+        window.history.replaceState({}, "", url.origin + url.pathname);
+        setPhase("ready");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        setMsg(message || "Invalid or expired link.");
+        setPhase("error");
+      }
+    };
+    run();
+  }, []);
+
+  const validate = (): string | null => {
+    if (password.length < 8) {
+      return "Password must be at least 8 characters. | يجب أن تكون كلمة المرور 8 أحرف على الأقل.";
     }
+    if (/\s/.test(password)) {
+      return "Password cannot contain spaces. | لا يمكن أن تحتوي كلمة المرور على مسافات.";
+    }
+    if (containsArabic(password)) {
+      return "Password must use Latin letters/numbers only. | كلمة المرور يجب أن تكون بأحرف/أرقام لاتينية فقط.";
+    }
+    if (password !== confirm) {
+      return "Passwords do not match. | كلمتا المرور غير متطابقتين.";
+    }
+    return null;
   };
-  run();
-}, []);
 
   const handleUpdate = async () => {
     setMsg("");
-    if (password.length < 8) return setMsg("Password must be at least 8 characters.");
-    if (password !== confirm) return setMsg("Passwords do not match.");
-
+    const err = validate();
+    if (err) {
+      setMsg(err);
+      return;
+    }
     setPhase("updating");
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      setMsg(error.message);
+      setMsg(`${error.message}`);
       setPhase("ready");
     } else {
       setPhase("done");
     }
   };
 
-  // Card بدون any
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5f7fb" }}>
       <div
@@ -89,8 +105,14 @@ export default function RecoveryPage() {
     return (
       <Card>
         <h3 style={{ marginTop: 0 }}>Tactic Portal</h3>
-        <p style={{ color: "red" }}>{msg || "Invalid link."}</p>
-        <p style={{ fontSize: 12, color: "#555" }}>Try requesting a new reset link from the login page.</p>
+        <p style={{ color: "red", marginBottom: 8 }}>{msg || "Invalid link."}</p>
+        <p style={{ fontSize: 12, color: "#555", marginTop: 0 }}>
+          Try requesting a new reset link from the login page.
+        </p>
+        <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
+        <p style={{ fontSize: 12, color: "#555", marginTop: 0, direction: "rtl", textAlign: "right" }}>
+          جرّب طلب رابط إعادة تعيين جديد من صفحة تسجيل الدخول.
+        </p>
       </Card>
     );
   }
@@ -100,6 +122,13 @@ export default function RecoveryPage() {
       <Card>
         <h3 style={{ marginTop: 0 }}>Password updated</h3>
         <p>You can close this tab and log in to Tactic Portal.</p>
+
+        <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
+
+        <h3 style={{ marginTop: 0, direction: "rtl", textAlign: "right" }}>تم تحديث كلمة المرور</h3>
+        <p style={{ direction: "rtl", textAlign: "right" }}>
+          يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal.
+        </p>
       </Card>
     );
   }
@@ -114,17 +143,24 @@ export default function RecoveryPage() {
         placeholder="New password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
         style={{ width: "100%", padding: 10, margin: "10px 0", borderRadius: 6, border: "1px solid #ddd" }}
+        autoFocus
       />
       <input
         type="password"
         placeholder="Confirm new password"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
         style={{ width: "100%", padding: 10, margin: "6px 0 12px", borderRadius: 6, border: "1px solid #ddd" }}
       />
 
-      {msg && <p style={{ color: "red", marginTop: 0 }}>{msg}</p>}
+      {msg && (
+        <p style={{ color: "red", marginTop: 0 }}>
+          {msg}
+        </p>
+      )}
 
       <button
         onClick={handleUpdate}
@@ -133,15 +169,15 @@ export default function RecoveryPage() {
           width: "100%",
           padding: 12,
           border: "none",
-          background: "#000",
-          color: "#fff",
+          background: "#F5A623",
+          color: "#000",
           borderRadius: 8,
           fontWeight: 700,
           cursor: "pointer",
           opacity: phase === "updating" ? 0.7 : 1,
         }}
       >
-        {phase === "updating" ? "Updating…" : "Update Password"}
+        {phase === "updating" ? "Updating…" : "Update"}
       </button>
 
       <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid #eee" }} />
@@ -150,6 +186,14 @@ export default function RecoveryPage() {
         <strong>Tactic Portal</strong>
         <br />
         If you didn’t request this, you can safely ignore this page.
+      </div>
+
+      <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #eee" }} />
+
+      <div style={{ fontSize: 12, color: "#666", direction: "rtl", textAlign: "right" }}>
+        <strong>منصة Tactic Portal</strong>
+        <br />
+        إذا لم تطلب ذلك، يمكنك تجاهل هذه الصفحة بأمان.
       </div>
     </Card>
   );
