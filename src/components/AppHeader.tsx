@@ -1,16 +1,18 @@
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
-import { logout } from "@/utils/session";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import { logout } from "@/utils/session";
+
 type Props = {
   isArabic: boolean;
   onToggleLang: () => void;
-  showLogout?: boolean; // افتراضي = true
+  showLogout?: boolean;
 };
 
 export default function AppHeader({ isArabic, onToggleLang, showLogout = true }: Props) {
-  // ضبط اتجاه الصفحة وحفظ اللغة
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.dir = isArabic ? "rtl" : "ltr";
@@ -18,37 +20,49 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
     }
   }, [isArabic]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+    const preferred: "dark" | "light" =
+      saved ??
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    setTheme(preferred);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => (t === "dark" ? "light" : "dark"));
+
   return (
     <div
       style={{
         width: "100%",
-        backgroundColor: "#333",
+        backgroundColor: "var(--header-bg)",
+        color: "var(--text)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         padding: "10px 20px",
+        borderBottom: "1px solid var(--divider)",
       }}
     >
-      <Image
-  src="/logo.png"
-  alt="Logo"
-  width={120}
-  height={40}
-  style={{ height: "40px", width: "auto" }}
-  unoptimized // لو الصورة جاية من Supabase Storage أو CDN خارجي
-/>
+      <Image src="/logo.png" alt="Logo" width={120} height={40} style={{ height: 40, width: "auto" }} unoptimized />
 
-      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Link
           href="https://www.tai.com.sa"
           target="_blank"
           style={{
-            backgroundColor: "#f5a623",
-            color: "#000",
+            backgroundColor: "var(--accent)",
+            color: "var(--accent-foreground)",
             padding: "8px 12px",
-            borderRadius: "4px",
+            borderRadius: 8,
             textDecoration: "none",
-            fontWeight: "bold",
+            fontWeight: 700,
             fontSize: "0.9rem",
           }}
         >
@@ -59,12 +73,12 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
           <button
             onClick={logout}
             style={{
-              backgroundColor: "#f5a623",
-              color: "#000",
+              backgroundColor: "var(--accent)",
+              color: "var(--accent-foreground)",
               padding: "8px 12px",
               border: "none",
-              borderRadius: "4px",
-              fontWeight: "bold",
+              borderRadius: 8,
+              fontWeight: 700,
               fontSize: "0.9rem",
               cursor: "pointer",
             }}
@@ -76,17 +90,34 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
         <button
           onClick={onToggleLang}
           style={{
-            backgroundColor: "#f5a623",
-            color: "#000",
+            backgroundColor: "var(--accent)",
+            color: "var(--accent-foreground)",
             padding: "8px 12px",
             border: "none",
-            borderRadius: "4px",
-            fontWeight: "bold",
+            borderRadius: 8,
+            fontWeight: 700,
             fontSize: "0.9rem",
             cursor: "pointer",
           }}
         >
           {isArabic ? "EN" : "AR"}
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to Light" : "Switch to Dark"}
+          style={{
+            backgroundColor: "var(--chip-bg)",
+            color: "var(--text)",
+            padding: "8px 12px",
+            border: "1px solid var(--divider)",
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: "0.9rem",
+            cursor: "pointer",
+          }}
+        >
+          {theme === "dark" ? (isArabic ? "فاتح" : "Light") : (isArabic ? "داكن" : "Dark")}
         </button>
       </div>
     </div>
