@@ -1,24 +1,27 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
+import Image from "next/image";
 
-// نوع المستخدم اللي بنحتاجه في الواجهة
 type PortalUser = {
   id: string;
   role: string;
   username?: string;
-  [key: string]: unknown; // للسماح بخصائص إضافية بدون استخدام any
+  [key: string]: unknown;
 };
 
 export default function LoginPage() {
   const [isArabic, setIsArabic] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleLanguage = () => setIsArabic((s) => !s);
 
@@ -26,7 +29,6 @@ export default function LoginPage() {
     wrong: isArabic ? "البيانات غلط" : "Invalid username or password",
   };
 
-  // يقرأ المستخدم من localStorage ثم sessionStorage
   function getStoredUser(): PortalUser | null {
     try {
       const ls = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null;
@@ -39,26 +41,47 @@ export default function LoginPage() {
     }
   }
 
-  // يقرر مسار التحويل حسب الدور
   function routeByRole(user: PortalUser) {
     const role = String(user?.role || "").toLowerCase();
     if (role === "super_admin") router.replace("/super-admin/dashboard");
     else if (role === "admin") router.replace("/admin/dashboard");
   }
 
-  // Auto-redirect إذا كانت جلسة محفوظة
+  // Prefill username & rememberMe
+  useEffect(() => {
+    try {
+      const remembered = localStorage.getItem("rememberedUsername");
+      const rememberFlag = localStorage.getItem("rememberMe") === "1";
+      if (remembered) setUsername(remembered);
+      setRememberMe(rememberFlag);
+    } catch {}
+  }, []);
+
+  // Auto-redirect if already signed in
   useEffect(() => {
     const stored = getStoredUser();
     if (stored) routeByRole(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Sync rememberMe + username to storage (username only, no passwords)
+  useEffect(() => {
+    try {
+      if (rememberMe && username.trim()) {
+        localStorage.setItem("rememberedUsername", username.trim());
+        localStorage.setItem("rememberMe", "1");
+      } else {
+        localStorage.removeItem("rememberedUsername");
+        localStorage.setItem("rememberMe", "0");
+      }
+    } catch {}
+  }, [rememberMe, username]);
+
   const handleLogin = async () => {
     setErrorMsg("");
     setLoading(true);
 
     try {
-      // التحقق من المستخدم في جدول Users (حسب تصميمك الحالي)
       const { data, error } = await supabase
         .from("Users")
         .select("*")
@@ -72,7 +95,6 @@ export default function LoginPage() {
       }
 
       const user = data as unknown as PortalUser;
-
       const role = String(user.role || "").toLowerCase();
       const isSuper = role === "super_admin";
       const isAdmin = role === "admin";
@@ -81,12 +103,11 @@ export default function LoginPage() {
         return;
       }
 
-      // حفظ الجلسة محليًا
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem("currentUser", JSON.stringify(user));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
-      // تسجيل جلسة في user_sessions
+      // record session
       const sessionKey = crypto.randomUUID();
       await supabase.from("user_sessions").insert({
         user_id: user.id,
@@ -96,12 +117,29 @@ export default function LoginPage() {
       });
       storage.setItem("session_key", sessionKey);
 
-      // توجيه حسب الدور
-      if (isSuper) router.push("/super-admin/dashboard");
-      else router.push("/admin/dashboard");
+      // persist username for next time if rememberMe
+      if (rememberMe) {
+        try {
+          localStorage.setItem("rememberedUsername", username.trim());
+        } catch {}
+      }
+
+      // Navigate then hard refresh to fetch everything fresh
+      const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
+      router.push(target);
+      setTimeout(() => {
+        try {
+          // Next.js App Router: force data re-fetch after navigation
+          window.location.reload();
+        } catch {}
+      }, 150);
     } finally {
       setLoading(false);
     }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleLogin();
   };
 
   return (
@@ -125,11 +163,14 @@ export default function LoginPage() {
           padding: "10px 20px",
         }}
       >
-        <img
-          src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-          alt="Tactic Logo"
-          style={{ height: "75px" }}
-        />
+       <Image
+  src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png"
+  alt="Tactic Logo"
+  width={200}
+  height={75}
+  style={{ height: "75px", width: "auto" }}
+  priority
+/>
 
         <div style={{ display: "flex", gap: "10px" }}>
           <a
@@ -184,15 +225,17 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          <img
-            src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//logo.png"
-            alt="Tactic Logo"
-            style={{
-              width: "200px",
-              margin: "0 auto 20px auto",
-              display: "block",
-            }}
-          />
+         <Image
+  src="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png"
+  alt="Tactic Logo"
+  width={200}
+  height={80}
+  style={{
+    width: "200px",
+    margin: "0 auto 20px auto",
+    display: "block",
+  }}
+/>
           <h2 style={{ color: "white", marginBottom: "1rem", whiteSpace: "pre-line" }}>
             {isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in"}
           </h2>
@@ -202,6 +245,7 @@ export default function LoginPage() {
             placeholder={isArabic ? "اسم المستخدم" : "User Name"}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={onKeyDown}
             style={{
               display: "block",
               width: "100%",
@@ -210,22 +254,53 @@ export default function LoginPage() {
               borderRadius: "4px",
               border: "none",
             }}
+            autoComplete="username"
           />
 
-          <input
-            type="password"
-            placeholder={isArabic ? "كلمة المرور" : "Password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "10px",
-              marginBottom: "0.5rem",
-              borderRadius: "4px",
-              border: "none",
-            }}
-          />
+          {/* Password with eye toggle */}
+          <div style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
+            <input
+              ref={passwordInputRef}
+              type={showPassword ? "text" : "password"}
+              placeholder={isArabic ? "كلمة المرور" : "Password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={onKeyDown}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "10px 42px 10px 10px",
+                borderRadius: "4px",
+                border: "none",
+              }}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setShowPassword((s) => !s);
+                // keep focus on input
+                passwordInputRef.current?.focus();
+              }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: "1.1rem",
+                lineHeight: 1,
+                padding: "4px",
+                color: "#999",
+              }}
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
 
           <div
             style={{
@@ -237,12 +312,11 @@ export default function LoginPage() {
               fontSize: "0.9rem",
             }}
           >
-            <label style={{ display: "flex", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                style={{ marginRight: "5px" }}
               />
               {isArabic ? "تذكرني" : "Remember me"}
             </label>
