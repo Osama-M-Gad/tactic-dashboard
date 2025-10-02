@@ -18,11 +18,7 @@ export default function AppHeader({
   className,
 }: Props) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
-    // أخفي اللوجو لو الصورة مش متاحة
-    e.currentTarget.style.display = "none";
-  };
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -70,15 +66,21 @@ export default function AppHeader({
         zIndex: 20,
       }}
     >
-      <Image
-        src="/logo.png"            // تأكد أنه موجود في public/logo.png
-        alt="Tactic Portal"
-        width={120}
-        height={40}
-        priority
-        onError={handleImgError}
-        style={{ height: 40, width: "auto" }}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {!logoFailed ? (
+          <Image
+            src="/logo.png"   // تأكد من public/logo.png وأن الـ URL /logo.png يفتح في المتصفح
+            alt="Tactic Portal"
+            width={120}
+            height={40}
+            priority
+            style={{ height: 40, width: "auto" }}
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <strong style={{ fontSize: 18 }}>Tactic Portal</strong>
+        )}
+      </div>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Link

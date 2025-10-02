@@ -35,7 +35,7 @@ export default function UpdatePasswordPage() {
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const focusedOnce = useRef(false);
 
-  // IDs ثابتة لتفادي تريجر مدراء كلمات المرور
+  // IDs/Names عشوائية لتجنّب كلمة "password"
   const newPassId = useId();
   const confirmId = useId();
 
@@ -147,12 +147,14 @@ export default function UpdatePasswordPage() {
       <input
         ref={inputRef}
         id={fieldId}
-        name={fieldName}             // أسماء/IDs لا تحتوي كلمة "password"
+        name={fieldName}
         type={shown ? "text" : "password"}
         placeholder={placeholder}
         value={value}
-        autoComplete="off"           // تعطيل اقتراحات مدراء كلمات المرور
+        autoComplete="off"
+        autoCorrect="off"
         autoCapitalize="none"
+        aria-autocomplete="none"
         spellCheck={false}
         inputMode="text"
         data-lpignore="true"
@@ -250,31 +252,31 @@ export default function UpdatePasswordPage() {
         <Card>
           <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
 
-          {/* كلمة المرور */}
-          <InputWithEye
-            inputRef={passRef}
-            value={password}
-            onChange={(v) => setPassword(v)}
-            placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
-            shown={show1}
-            setShown={setShow1}
-            className="input-gold"
-            fieldId={`np-${newPassId}`}
-            fieldName={`np-${newPassId}`}
-          />
+          <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+            <InputWithEye
+              inputRef={passRef}
+              value={password}
+              onChange={(v) => setPassword(v)}
+              placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
+              shown={show1}
+              setShown={setShow1}
+              className="input-gold"
+              fieldId={`np-${newPassId}`}
+              fieldName={`np-${newPassId}`}
+            />
 
-          {/* تأكيد كلمة المرور */}
-          <InputWithEye
-            inputRef={confirmRef}
-            value={confirm}
-            onChange={(v) => setConfirm(v)}
-            placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
-            shown={show2}
-            setShown={setShow2}
-            className="input-gold"
-            fieldId={`cp-${confirmId}`}
-            fieldName={`cp-${confirmId}`}
-          />
+            <InputWithEye
+              inputRef={confirmRef}
+              value={confirm}
+              onChange={(v) => setConfirm(v)}
+              placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
+              shown={show2}
+              setShown={setShow2}
+              className="input-gold"
+              fieldId={`cp-${confirmId}`}
+              fieldName={`cp-${confirmId}`}
+            />
+          </form>
 
           {msg && <p style={{ color: "#ff6b6b", marginTop: 0 }}>{msg}</p>}
 
