@@ -57,7 +57,14 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true, c
         zIndex: 20,
       }}
     >
-      <Image src="/logo.png" alt="Logo" width={120} height={40} style={{ height: 40, width: "auto" }} unoptimized />
+      <Image
+  src="/logo.png"
+  alt="Tactic Portal Logo"
+  width={120}
+  height={40}
+  priority
+  style={{ height: "40px", width: "auto" }}
+/>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Link

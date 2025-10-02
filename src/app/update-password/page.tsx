@@ -1,9 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import AppHeader from "@/components/AppHeader";
 
 type Phase = "verifying" | "ready" | "updating" | "done" | "error";
+
+/* ===== Icons ===== */
+const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
+    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
+  </svg>
+);
+const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
+    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8"/>
+    <path d="M10.58 5.08A11.5 11.5 0 0 1 12 5c6.5 0 10 6 10 6a18.6 18.6 0 0 1-4.11 4.59M6.11 8.41A18.6 18.6 0 0 0 2 11s3.5 6 10 6c1.13 0 2.2-.18 3.2-.5" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
+  </svg>
+);
 
 export default function UpdatePasswordPage() {
   const [phase, setPhase] = useState<Phase>("verifying");
@@ -11,11 +26,28 @@ export default function UpdatePasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState("");
 
+  // visibility toggles
+  const [show1, setShow1] = useState(false);
+  const [show2, setShow2] = useState(false);
+
+  // refs لمنع قفز التركيز
+  const passRef = useRef<HTMLInputElement | null>(null);
+  const confirmRef = useRef<HTMLInputElement | null>(null);
+  const focusedOnce = useRef(false);
+
   // اللغة من الهيدر
   const [isArabic, setIsArabic] = useState<boolean>(() =>
     typeof window !== "undefined" ? localStorage.getItem("lang") === "ar" : false
   );
   const toggleLang = () => setIsArabic(v => !v);
+
+  // ركّز على أول حقل مرة واحدة عند الجاهزية
+  useEffect(() => {
+    if (phase === "ready" && !focusedOnce.current) {
+      focusedOnce.current = true;
+      passRef.current?.focus();
+    }
+  }, [phase]);
 
   // التحقق من رابط Supabase وتثبيت الجلسة
   useEffect(() => {
@@ -71,7 +103,7 @@ export default function UpdatePasswordPage() {
     <div style={{ minHeight: "calc(100vh - 64px)", display: "grid", placeItems: "center", padding: 24 }}>
       <div
         style={{
-          width: 380,
+          width: 420,
           background: "var(--card)",
           color: "var(--text)",
           padding: 20,
@@ -82,6 +114,70 @@ export default function UpdatePasswordPage() {
       >
         {children}
       </div>
+    </div>
+  );
+
+  const InputWithEye = ({
+    inputRef,
+    value,
+    onChange,
+    placeholder,
+    shown,
+    setShown,
+  }: {
+    inputRef: React.RefObject<HTMLInputElement>;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+    shown: boolean;
+    setShown: (v: boolean) => void;
+  }) => (
+    <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
+      <input
+        ref={inputRef}
+        type={shown ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        autoComplete="new-password"
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
+        style={{
+          width: "100%",
+          padding: "10px 44px 10px 12px",
+          borderRadius: 8,
+          border: "1px solid var(--input-border)",
+          background: "var(--input-bg)",
+          color: "var(--input-text)",
+          outline: "none",
+        }}
+      />
+      <button
+        type="button"
+        aria-label={shown ? (isArabic ? "إخفاء كلمة المرور" : "Hide password") : (isArabic ? "إظهار كلمة المرور" : "Show password")}
+        title={shown ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
+        onClick={() => {
+          setShown(!shown);
+          inputRef.current?.focus();
+        }}
+        style={{
+          position: "absolute",
+          right: 10,
+          top: "50%",
+          transform: "translateY(-50%)",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          padding: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--muted)",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}
+      >
+        {shown ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
     </div>
   );
 
@@ -119,41 +215,24 @@ export default function UpdatePasswordPage() {
         <Card>
           <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
 
-          {/* كلمة المرور */}
-          <input
-            type="password"
-            placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
+          {/* كلمة المرور + عين */}
+          <InputWithEye
+            inputRef={passRef}
             value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleUpdate()}
-            style={{
-              width: "100%",
-              padding: 10,
-              margin: "10px 0",
-              borderRadius: 8,
-              border: "1px solid var(--input-border)",
-              background: "var(--input-bg)",
-              color: "var(--input-text)",
-            }}
-            autoFocus
+            onChange={setPassword}
+            placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
+            shown={show1}
+            setShown={setShow1}
           />
 
-          {/* تأكيد كلمة المرور */}
-          <input
-            type="password"
-            placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
+          {/* تأكيد كلمة المرور + عين */}
+          <InputWithEye
+            inputRef={confirmRef}
             value={confirm}
-            onChange={e => setConfirm(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleUpdate()}
-            style={{
-              width: "100%",
-              padding: 10,
-              margin: "6px 0 12px",
-              borderRadius: 8,
-              border: "1px solid var(--input-border)",
-              background: "var(--input-bg)",
-              color: "var(--input-text)",
-            }}
+            onChange={setConfirm}
+            placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
+            shown={show2}
+            setShown={setShow2}
           />
 
           {msg && <p style={{ color: "#ff6b6b", marginTop: 0 }}>{msg}</p>}
