@@ -11,13 +11,13 @@ export default function RecoveryPage() {
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState("");
 
-  // اللغة تتحكم فيها الهيدر؛ بنقرأ التفضيل المحفوظ كإفتراض
+  // اللغة من الهيدر
   const [isArabic, setIsArabic] = useState<boolean>(() =>
     typeof window !== "undefined" ? localStorage.getItem("lang") === "ar" : false
   );
   const toggleLang = () => setIsArabic(v => !v);
 
-  // تحقّق من وجود توكنات Supabase في الـ hash وتثبيت الجلسة
+  // تحقق من التوكنات وتثبيت السيشن
   useEffect(() => {
     const run = async () => {
       try {
@@ -30,7 +30,6 @@ export default function RecoveryPage() {
         const { error } = await supabase.auth.setSession({ access_token, refresh_token });
         if (error) throw error;
 
-        // نظّف الـ URL بعد نجاح التثبيت
         window.history.replaceState({}, "", url.origin + url.pathname);
         setPhase("ready");
       } catch (e: unknown) {
@@ -40,24 +39,17 @@ export default function RecoveryPage() {
       }
     };
     run();
-    // نعيد التحقق من الرسالة عند تغيير اللغة فقط لو كنا في error
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // التحقق البسيط
+  // تحقق من كلمة السر
   const validate = (): string | null => {
     if (password.length < 6)
-      return isArabic
-        ? "يجب أن تكون كلمة المرور 6 أحرف على الأقل."
-        : "Password must be at least 6 characters.";
+      return isArabic ? "يجب أن تكون كلمة المرور 6 أحرف على الأقل." : "Password must be at least 6 characters.";
     if (/\s/.test(password))
-      return isArabic
-        ? "لا يمكن أن تحتوي كلمة المرور على مسافات."
-        : "Password cannot contain spaces.";
+      return isArabic ? "لا يمكن أن تحتوي كلمة المرور على مسافات." : "Password cannot contain spaces.";
     if (password !== confirm)
-      return isArabic
-        ? "كلمتا المرور غير متطابقتين."
-        : "Passwords do not match.";
+      return isArabic ? "كلمتا المرور غير متطابقتين." : "Passwords do not match.";
     return null;
   };
 
@@ -76,6 +68,7 @@ export default function RecoveryPage() {
     }
   };
 
+  // كارت عام
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div style={{ minHeight: "calc(100vh - 64px)", display: "grid", placeItems: "center", padding: 24 }}>
       <div
@@ -96,8 +89,13 @@ export default function RecoveryPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
-      {/* الهيدر: يتحكم في اللغة والثيم (ومن ثم الصفحة غامقة افتراضيًا) */}
-      <AppHeader isArabic={isArabic} onToggleLang={toggleLang} showLogout={false} />
+      {/* الهيدر */}
+      <AppHeader
+        isArabic={isArabic}
+        onToggleLang={toggleLang}
+        showLogout={false}
+        className="app-header"
+      />
 
       {phase === "verifying" && (
         <Card>
@@ -112,7 +110,15 @@ export default function RecoveryPage() {
           <p style={{ color: "#ff6b6b", marginBottom: 8 }}>
             {msg || (isArabic ? "رابط غير صالح." : "Invalid link.")}
           </p>
-          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 0, direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--muted)",
+              marginTop: 0,
+              direction: isArabic ? "rtl" : "ltr",
+              textAlign: isArabic ? "right" : "left",
+            }}
+          >
             {isArabic
               ? "جرّب طلب رابط إعادة تعيين جديد من صفحة تسجيل الدخول."
               : "Try requesting a new reset link from the login page."}
@@ -122,9 +128,7 @@ export default function RecoveryPage() {
 
       {phase === "done" && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>
-            {isArabic ? "تم تحديث كلمة المرور" : "Password updated"}
-          </h3>
+          <h3 style={{ marginTop: 0 }}>{isArabic ? "تم تحديث كلمة المرور" : "Password updated"}</h3>
           <p>
             {isArabic
               ? "يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal."
@@ -135,11 +139,9 @@ export default function RecoveryPage() {
 
       {(phase === "ready" || phase === "updating") && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>
-            {isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}
-          </h3>
+          <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
 
-          {/* الحقل الأول: كلمة المرور */}
+          {/* كلمة المرور */}
           <input
             type="password"
             placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
@@ -151,14 +153,14 @@ export default function RecoveryPage() {
               padding: 10,
               margin: "10px 0",
               borderRadius: 8,
-              border: "1px solid var(--divider)",
-              background: "transparent",
-              color: "var(--text)",
+              border: "1px solid var(--input-border)",
+              background: "var(--input-bg)",   // ✅
+              color: "var(--input-text)",      // ✅
             }}
             autoFocus
           />
 
-          {/* الحقل الثاني: تأكيد كلمة المرور */}
+          {/* تأكيد كلمة المرور */}
           <input
             type="password"
             placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
@@ -170,9 +172,9 @@ export default function RecoveryPage() {
               padding: 10,
               margin: "6px 0 12px",
               borderRadius: 8,
-              border: "1px solid var(--divider)",
-              background: "transparent",
-              color: "var(--text)",
+              border: "1px solid var(--input-border)",
+              background: "var(--input-bg)",   // ✅
+              color: "var(--input-text)",      // ✅
             }}
           />
 
@@ -194,13 +196,20 @@ export default function RecoveryPage() {
             }}
           >
             {phase === "updating"
-              ? (isArabic ? "جارٍ التحديث…" : "Updating…")
-              : (isArabic ? "تحديث" : "Update")}
+              ? isArabic ? "جارٍ التحديث…" : "Updating…"
+              : isArabic ? "تحديث" : "Update"}
           </button>
 
           <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid var(--divider)" }} />
 
-          <div style={{ fontSize: 12, color: "var(--muted)", direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--muted)",
+              direction: isArabic ? "rtl" : "ltr",
+              textAlign: isArabic ? "right" : "left",
+            }}
+          >
             <strong>Tactic Portal</strong>
             <br />
             {isArabic

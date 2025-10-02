@@ -8,9 +8,10 @@ type Props = {
   isArabic: boolean;
   onToggleLang: () => void;
   showLogout?: boolean;
+  className?: string; // ✅ جديد
 };
 
-export default function AppHeader({ isArabic, onToggleLang, showLogout = true }: Props) {
+export default function AppHeader({ isArabic, onToggleLang, showLogout = true, className }: Props) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -39,6 +40,8 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
 
   return (
     <div
+      role="banner"
+      className={["app-header", className].filter(Boolean).join(" ")} // ✅ يفعّل ألوان الهيدر من globals.css
       style={{
         width: "100%",
         backgroundColor: "var(--header-bg)",
@@ -48,6 +51,10 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true }:
         alignItems: "center",
         padding: "10px 20px",
         borderBottom: "1px solid var(--divider)",
+        minHeight: 64,      // ✅ يضمن ظهور الشريط
+        position: "sticky", // ✅ يظل ظاهرًا أعلى الصفحة
+        top: 0,
+        zIndex: 20,
       }}
     >
       <Image src="/logo.png" alt="Logo" width={120} height={40} style={{ height: 40, width: "auto" }} unoptimized />
