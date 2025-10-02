@@ -132,7 +132,7 @@ export default function UpdatePasswordPage() {
     placeholder: string;
     shown: boolean;
     setShown: (v: boolean) => void;
-    className?: string;             // ✅ لدعم كلاس الاطار الذهبي
+    className?: string;
   }) => (
     <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
       <input
@@ -140,10 +140,17 @@ export default function UpdatePasswordPage() {
         type={shown ? "text" : "password"}
         placeholder={placeholder}
         value={value}
+        name={placeholder.includes("Confirm") || placeholder.includes("تأكيد") ? "confirm-password" : "new-password"}
+        id={placeholder.includes("Confirm") || placeholder.includes("تأكيد") ? "confirm-password" : "new-password"}
         autoComplete="new-password"
+        autoCapitalize="none"
+        spellCheck={false}
+        inputMode="text"
+        data-lpignore="true"
+        data-1p-ignore
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
-        className={className}        // ✅ نطبّق input-gold هنا إن لزم
+        className={className}
         style={{
           width: "100%",
           padding: "10px 44px 10px 12px",
@@ -158,10 +165,8 @@ export default function UpdatePasswordPage() {
         type="button"
         aria-label={shown ? (isArabic ? "إخفاء كلمة المرور" : "Hide password") : (isArabic ? "إظهار كلمة المرور" : "Show password")}
         title={shown ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
-        onClick={() => {
-          setShown(!shown);
-          inputRef.current?.focus();
-        }}
+        onMouseDown={(e) => e.preventDefault()}   // مايفقدش الفوكس
+        onClick={() => setShown(!shown)}          // بدون إعادة focus
         style={{
           position: "absolute",
           right: 10,
@@ -218,22 +223,20 @@ export default function UpdatePasswordPage() {
         <Card>
           <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
 
-          {/* كلمة المرور + عين + إطار ذهبي */}
           <InputWithEye
             inputRef={passRef}
             value={password}
-            onChange={(v) => setPassword(v)}        // ✅ يرضي TS
+            onChange={(v) => setPassword(v)}
             placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
             shown={show1}
             setShown={setShow1}
-            className="input-gold"                  // ✅ كلاس الإطار الذهبي
+            className="input-gold"
           />
 
-          {/* تأكيد كلمة المرور + عين + إطار ذهبي */}
           <InputWithEye
             inputRef={confirmRef}
             value={confirm}
-            onChange={(v) => setConfirm(v)}         // ✅ يرضي TS
+            onChange={(v) => setConfirm(v)}
             placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
             shown={show2}
             setShown={setShow2}

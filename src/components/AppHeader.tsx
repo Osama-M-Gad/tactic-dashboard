@@ -8,11 +8,20 @@ type Props = {
   isArabic: boolean;
   onToggleLang: () => void;
   showLogout?: boolean;
-  className?: string; // ✅ جديد
+  className?: string;
 };
 
-export default function AppHeader({ isArabic, onToggleLang, showLogout = true, className }: Props) {
+export default function AppHeader({
+  isArabic,
+  onToggleLang,
+  showLogout = true,
+  className,
+}: Props) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
+    e.currentTarget.style.display = "none";
+  };
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -26,7 +35,10 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true, c
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
     const preferred: "dark" | "light" =
       saved ??
-      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      (window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light");
     setTheme(preferred);
   }, []);
 
@@ -36,12 +48,12 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true, c
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(t => (t === "dark" ? "light" : "dark"));
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   return (
     <div
       role="banner"
-      className={["app-header", className].filter(Boolean).join(" ")} // ✅ يفعّل ألوان الهيدر من globals.css
+      className={["app-header", className].filter(Boolean).join(" ")}
       style={{
         width: "100%",
         backgroundColor: "var(--header-bg)",
@@ -51,20 +63,21 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true, c
         alignItems: "center",
         padding: "10px 20px",
         borderBottom: "1px solid var(--divider)",
-        minHeight: 64,      // ✅ يضمن ظهور الشريط
-        position: "sticky", // ✅ يظل ظاهرًا أعلى الصفحة
+        minHeight: 64,
+        position: "sticky",
         top: 0,
         zIndex: 20,
       }}
     >
       <Image
-  src="/logo.png"
-  alt="Tactic Portal Logo"
-  width={120}
-  height={40}
-  priority
-  style={{ height: "40px", width: "auto" }}
-/>
+        src="/logo.png"
+        alt="Tactic Portal"
+        width={120}
+        height={40}
+        priority
+        onError={handleImgError}
+        style={{ height: 40, width: "auto" }}
+      />
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Link
@@ -131,7 +144,13 @@ export default function AppHeader({ isArabic, onToggleLang, showLogout = true, c
             cursor: "pointer",
           }}
         >
-          {theme === "dark" ? (isArabic ? "فاتح" : "Light") : (isArabic ? "داكن" : "Dark")}
+          {theme === "dark"
+            ? isArabic
+              ? "فاتح"
+              : "Light"
+            : isArabic
+            ? "داكن"
+            : "Dark"}
         </button>
       </div>
     </div>
