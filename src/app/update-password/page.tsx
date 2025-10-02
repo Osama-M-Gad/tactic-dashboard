@@ -124,6 +124,7 @@ export default function UpdatePasswordPage() {
     placeholder,
     shown,
     setShown,
+    className,
   }: {
     inputRef: React.RefObject<HTMLInputElement>;
     value: string;
@@ -131,6 +132,7 @@ export default function UpdatePasswordPage() {
     placeholder: string;
     shown: boolean;
     setShown: (v: boolean) => void;
+    className?: string;             // ✅ لدعم كلاس الاطار الذهبي
   }) => (
     <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
       <input
@@ -141,6 +143,7 @@ export default function UpdatePasswordPage() {
         autoComplete="new-password"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
+        className={className}        // ✅ نطبّق input-gold هنا إن لزم
         style={{
           width: "100%",
           padding: "10px 44px 10px 12px",
@@ -215,24 +218,26 @@ export default function UpdatePasswordPage() {
         <Card>
           <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
 
-          {/* كلمة المرور + عين */}
+          {/* كلمة المرور + عين + إطار ذهبي */}
           <InputWithEye
             inputRef={passRef}
             value={password}
-            onChange={setPassword}
+            onChange={(v) => setPassword(v)}        // ✅ يرضي TS
             placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
             shown={show1}
             setShown={setShow1}
+            className="input-gold"                  // ✅ كلاس الإطار الذهبي
           />
 
-          {/* تأكيد كلمة المرور + عين */}
+          {/* تأكيد كلمة المرور + عين + إطار ذهبي */}
           <InputWithEye
             inputRef={confirmRef}
             value={confirm}
-            onChange={setConfirm}
+            onChange={(v) => setConfirm(v)}         // ✅ يرضي TS
             placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
             shown={show2}
             setShown={setShow2}
+            className="input-gold"
           />
 
           {msg && <p style={{ color: "#ff6b6b", marginTop: 0 }}>{msg}</p>}

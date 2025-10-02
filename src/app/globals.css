@@ -139,3 +139,14 @@ hr {
 @layer utilities {
   .text-balance { text-wrap: balance; }
 }
+/* Gold stroke for inputs */
+.input-gold {
+  border: 1px solid var(--input-border);
+  box-shadow: 0 0 0 1px var(--accent);
+  border-radius: 8px;
+}
+.input-gold:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
