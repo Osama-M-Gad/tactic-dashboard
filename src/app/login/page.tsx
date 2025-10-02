@@ -10,8 +10,10 @@ type PortalUser = {
   role: string;
   username?: string;
   email?: string;
+  auth_user_id?: string; // << أضف دي
   [key: string]: unknown;
 };
+
 
 /* ===== Icons ===== */
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -98,6 +100,15 @@ useEffect(() => {
         }, 300);
       }
     } catch {}
+    // داخل useEffect الخاص بالـ auto-redirect:
+const rememberFlag = localStorage.getItem("rememberMe") === "1";
+const didAutoRefresh = sessionStorage.getItem("did_auto_refresh") === "1";
+if (rememberFlag && !didAutoRefresh) {
+  setTimeout(() => {
+    sessionStorage.setItem("did_auto_refresh", "1");
+    window.location.reload();
+  }, 300);
+}
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
@@ -116,43 +127,83 @@ useEffect(() => {
   }, [rememberMe, username]);
 
   const handleLogin = async () => {
-    setErrorMsg("");
-    setLoading(true);
+  setErrorMsg("");
+  setLoading(true);
+  try {
+    const { data, error } = await supabase
+      .from("Users")
+      .select("*")
+      .eq("username", username.trim())
+      .eq("password", password)
+      .single();
+
+    if (error || !data) { setErrorMsg(TEXT.wrong); return; }
+
+    const user = data as PortalUser;
+    const role = String(user.role || "").toLowerCase();
+    const isSuper = role === "super_admin";
+    const isAdmin = role === "admin";
+    if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
+
+    /* ================== [ربط تلقائي مع Supabase Auth] ================== */
     try {
-      const { data, error } = await supabase
-        .from("Users")
-        .select("*")
-        .eq("username", username.trim())
-        .eq("password", password)
-        .single();
+      const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+      // هنربط بس لو مفيش auth_user_id عندنا أصلاً
+      // (لو عندك عمود auth_user_id في الجدول، سيبه كما هو. هنا بس بنحاول نضمن وجود مستخدم في Auth)
+      if (email) {
+        // 1) حاول تعمل sign-in في Auth بنفس الإيميل والباسورد المدخَلين
+        const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (error || !data) { setErrorMsg(TEXT.wrong); return; }
+        if (sIn?.user && !sInErr) {
+          // نجح تسجيل الدخول في Auth → اختياري: تحدّث Users.auth_user_id لو عندك العمود ده
+          await supabase
+  .from("Users")
+  .update({ auth_user_id: sIn.user.id })   // << بدون as any
+  .eq("id", user.id);
+        } else {
+          // 2) مفيش يوزر في Auth → اعمل signUp
+          const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
 
-      const user = data as unknown as PortalUser;
-      const role = String(user.role || "").toLowerCase();
-      const isSuper = role === "super_admin";
-      const isAdmin = role === "admin";
-      if (!isSuper && !isAdmin) { setErrorMsg(TEXT.wrong); return; }
-
-      const storage = rememberMe ? localStorage : sessionStorage;
-      storage.setItem("currentUser", JSON.stringify(user));
-      storage.setItem("rememberMe", rememberMe ? "1" : "0");
-
-      const sessionKey = crypto.randomUUID();
-      await supabase.from("user_sessions").insert({
-        user_id: user.id, session_key: sessionKey, platform: "web", app_version: "portal-v1",
-      });
-      storage.setItem("session_key", sessionKey);
-
-      if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
-
-      const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
-      router.push(target);
-      setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
-    } finally {
-      setLoading(false);
+          if (sUp?.user && !sUpErr) {
+           await supabase
+  .from("Users")
+  .update({ auth_user_id: sUp.user.id })   // << بدون as any
+  .eq("id", user.id);
+          } else if (sUpErr && /already registered|User already registered/i.test(sUpErr.message)) {
+            // الإيميل موجود في Auth بباسورد مختلف → نكمّل عادي ونخلّي اليوزر يستخدم Forget Password لاحقاً
+            console.warn("Email exists in Auth with a different password. Ask user to reset via 'Forget Password'.");
+          }
+        }
+      }
+    } catch (linkErr) {
+      console.warn("Auth link error:", linkErr);
     }
-  };
+    /* ================== [انتهى الربط] ================== */
+
+    // تخزين الجلسة محليًا + تسجيل session
+    const storage = rememberMe ? localStorage : sessionStorage;
+    storage.setItem("currentUser", JSON.stringify(user));
+    storage.setItem("rememberMe", rememberMe ? "1" : "0");
+
+    const sessionKey = crypto.randomUUID();
+    await supabase.from("user_sessions").insert({
+      user_id: user.id, session_key: sessionKey, platform: "web", app_version: "portal-v1",
+    });
+    storage.setItem("session_key", sessionKey);
+
+    if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
+
+    const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
+    router.push(target);
+    setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleResetPassword = async () => {
   setResetMsg("");
@@ -175,7 +226,7 @@ useEffect(() => {
       .maybeSingle();
 
     if (uErr || !u || !u.auth_user_id) {
-      setResetMsg(isArabic ? "البريد غير مسجّل" : "Email not found");
+      setResetMsg(isArabic ? "البريد غير مسجّل" : "Email not exits");
       return;
     }
 
