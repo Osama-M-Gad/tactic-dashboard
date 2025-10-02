@@ -2,40 +2,140 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Default: Dark theme */
+/* ===== Default: Dark theme ===== */
 :root {
-  --bg: #0e0f13;
-  --header-bg: #16181d;
-  --card: #1b1d22;
+  /* Layout & surfaces */
+  --bg: #0e0f13;          /* الخلفية العامة (أسود مزرّق) */
+  --header-bg: #16181d;   /* الهيدر رمادي يبان على الخلفية الداكنة */
+  --card: #1b1d22;        /* كروت ونوافذ */
+  --divider: #2a2d33;
+
+  /* Text & accents */
   --text: #f5f7fb;
   --muted: #9aa1ac;
-  --divider: #2a2d33;
+  --accent: #f5a623;
+  --accent-foreground: #000;
+
+  /* Chips/inputs */
   --chip-bg: #1f2228;
-  --accent: #f5a623;
-  --accent-foreground: #000;
+
+  /* Inputs (خلفيات افتراضية للحقول) */
+  --input-bg: transparent;     /* نستخدم شفاف في الدارك */
+  --input-text: var(--text);
+  --input-border: var(--divider);
+  --input-placeholder: #9097a3;
+  --input-focus: #f5a623;
 }
 
-/* Light theme (switches when data-theme="light") */
+/* ===== Light theme (عند data-theme="light") ===== */
 :root[data-theme="light"] {
-  --bg: #f5f7fb;
-  --header-bg: #ffffff;
+  --bg: #f5f7fb;          /* الخلفية العامة بيضاء/رمادية فاتحة */
+  --header-bg: #000000;   /* الهيدر أسود واضح على الخلفية البيضاء */
   --card: #ffffff;
-  --text: #111;
-  --muted: #555;
   --divider: #e6e8eb;
-  --chip-bg: #f0f2f5;
+
+  --text: #111111;
+  --muted: #555555;
   --accent: #f5a623;
   --accent-foreground: #000;
+
+  --chip-bg: #f0f2f5;
+
+  /* Inputs في الوضع الفاتح */
+  --input-bg: #ffffff;
+  --input-text: #111111;
+  --input-border: #d7d9de;
+  --input-placeholder: #9aa1ac;
+  --input-focus: #f5a623;
 }
 
+/* ===== Base ===== */
 html, body {
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-a { color: inherit; }
+a { color: inherit; text-decoration: none; }
 
+/* ===== Header resets (يعتمد على AppHeader) ===== */
+[data-theme] .app-header {
+  background: var(--header-bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--divider);
+}
+
+/* لو بتحط كلاس للحاوية الداخلية للهيدر */
+.app-header-inner a,
+.app-header-inner button {
+  color: inherit;
+}
+
+/* ===== Cards ===== */
+.card {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--divider);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  border-radius: 12px;
+}
+
+/* ===== Inputs (علاج مشكلة النص الأبيض على خلفية بيضاء) ===== */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+textarea,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--input-placeholder);
+}
+
+/* Focus */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--input-focus) 25%, transparent);
+}
+
+/* Disabled */
+input:disabled,
+button:disabled {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* ===== Separators ===== */
+hr {
+  border: none;
+  border-top: 1px solid var(--divider);
+  margin: 16px 0;
+}
+
+/* ===== Utilities ===== */
 @layer utilities {
   .text-balance { text-wrap: balance; }
 }
