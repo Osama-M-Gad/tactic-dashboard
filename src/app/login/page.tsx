@@ -11,14 +11,13 @@ type PortalUser = {
   [key: string]: unknown;
 };
 
-// SVG Icons للعين
+// SVG Icons
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8"/>
     <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
   </svg>
 );
-
 const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
     <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8"/>
@@ -123,7 +122,6 @@ export default function LoginPage() {
       storage.setItem("currentUser", JSON.stringify(user));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
-      // record session
       const sessionKey = crypto.randomUUID();
       await supabase.from("user_sessions").insert({
         user_id: user.id,
@@ -133,14 +131,12 @@ export default function LoginPage() {
       });
       storage.setItem("session_key", sessionKey);
 
-      // persist username for next time if rememberMe
       if (rememberMe) {
         try {
           localStorage.setItem("rememberedUsername", username.trim());
         } catch {}
       }
 
-      // Navigate then hard refresh to fetch everything fresh
       const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
       router.push(target);
       setTimeout(() => {
@@ -188,6 +184,7 @@ export default function LoginPage() {
           height={75}
           style={{ height: "75px", width: "auto" }}
           priority
+          unoptimized
         />
 
         <div style={{ display: "flex", gap: "10px" }}>
@@ -253,11 +250,14 @@ export default function LoginPage() {
               margin: "0 auto 20px auto",
               display: "block",
             }}
+            unoptimized
           />
+
           <h2 style={{ color: "white", marginBottom: "1rem", whiteSpace: "pre-line" }}>
             {isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in"}
           </h2>
 
+          {/* Username */}
           <input
             type="text"
             placeholder={isArabic ? "اسم المستخدم" : "User Name"}
@@ -269,13 +269,16 @@ export default function LoginPage() {
               width: "100%",
               padding: "10px",
               marginBottom: "1rem",
-              borderRadius: "4px",
-              border: "none",
+              borderRadius: "6px",
+              border: "1px solid rgba(0,0,0,0.15)",
+              background: "#fff",
+              color: "#111",
+              outline: "none",
             }}
             autoComplete="username"
           />
 
-          {/* Password with eye toggle */}
+          {/* Password + Eye */}
           <div style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
             <input
               ref={passwordInputRef}
@@ -289,9 +292,9 @@ export default function LoginPage() {
                 width: "100%",
                 padding: "10px 44px 10px 12px",
                 borderRadius: "6px",
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
+                border: "1px solid rgba(0,0,0,0.15)",
+                background: "#fff",
+                color: "#111",
                 outline: "none",
               }}
               autoComplete="current-password"
@@ -316,10 +319,10 @@ export default function LoginPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#d1d5db",
+                color: "#666",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#d1d5db")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#000")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
             >
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
