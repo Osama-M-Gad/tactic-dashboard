@@ -1,10 +1,36 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
-);
+// امنع الـ SSG/Prerender واشتغل في Node runtime
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+// util: أنشئ Supabase client داخل الهاندلر فقط
+function getSupabaseServerClient() {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  // في الراوتات السيرفرية استخدم service_role لو بتكتب/تعدّل
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY || // fallback لو عندك اسم مختلف
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; // آخر حل لو بتقرأ بس
+
+  if (!url || !key) {
+    // رسالة تشخيصية مفصلة بدل "supabaseKey is required"
+    throw new Error(
+      `Missing Supabase envs:
+        NEXT_PUBLIC_SUPABASE_URL: ${!!process.env.NEXT_PUBLIC_SUPABASE_URL}
+        SUPABASE_URL:               ${!!process.env.SUPABASE_URL}
+        SUPABASE_SERVICE_ROLE_KEY:  ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}
+        SUPABASE_ANON_KEY:          ${!!process.env.SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${!!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+    );
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
+}
 
 type UpsertClient = {
   client_code: string;
@@ -21,11 +47,8 @@ type UpsertClient = {
   app_steps?: string[];
 };
 
-const toStr = (v: unknown): string | null =>
-  v == null ? null : String(v);
-
-const toStrTrim = (v: unknown): string =>
-  String(v ?? "").trim();
+const toStr = (v: unknown): string | null => (v == null ? null : String(v));
+const toStrTrim = (v: unknown): string => String(v ?? "").trim();
 
 const toBool = (v: unknown): boolean | undefined => {
   if (v === true || v === false) return v;
@@ -44,6 +67,9 @@ const toStrArray = (v: unknown): string[] => {
 
 export async function POST(req: Request) {
   try {
+    // أنشئ العميل هنا (وقت الطلب فقط)
+    const supabase = getSupabaseServerClient();
+
     const body = (await req.json()) as { clients?: unknown };
     const raw = Array.isArray(body.clients) ? body.clients : [];
 
