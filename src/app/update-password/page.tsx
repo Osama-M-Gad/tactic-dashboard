@@ -8,34 +8,32 @@ type Phase = "verifying" | "ready" | "updating" | "done" | "error";
 /* ===== Icons ===== */
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
-    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8" />
-    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
   </svg>
 );
 const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" {...props}>
-    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" />
-    <path d="M10.58 5.08A11.5 11.5 0 0 1 12 5c6.5 0 10 6 10 6a18.6 18.6 0 0 1-4.11 4.59M6.11 8.41A18.6 18.6 0 0 0 2 11s3.5 6 10 6c1.13 0 2.2-.18 3.2-.5" stroke="currentColor" strokeWidth="1.8" />
-    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8"/>
+    <path d="M10.58 5.08A11.5 11.5 0 0 1 12 5c6.5 0 10 6 10 6a18.6 18.6 0 0 1-4.11 4.59M6.11 8.41A18.6 18.6 0 0 0 2 11s3.5 6 10 6c1.13 0 2.2-.18 3.2-.5" stroke="currentColor" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
   </svg>
 );
 
 export default function UpdatePasswordPage() {
   const [phase, setPhase] = useState<Phase>("verifying");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState("");
 
   // visibility toggles
   const [show1, setShow1] = useState(false);
   const [show2, setShow2] = useState(false);
 
-  // refs لمنع قفز التركيز
+  // refs للكتابة بدون فقدان فوكس (uncontrolled)
   const passRef = useRef<HTMLInputElement | null>(null);
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const focusedOnce = useRef(false);
 
-  // IDs/Names عشوائية لتجنّب كلمة "password"
+  // IDs فريدة لتجنب أي استدلال من مدير كلمات السر
   const newPassId = useId();
   const confirmId = useId();
 
@@ -43,9 +41,9 @@ export default function UpdatePasswordPage() {
   const [isArabic, setIsArabic] = useState<boolean>(() =>
     typeof window !== "undefined" ? localStorage.getItem("lang") === "ar" : false
   );
-  const toggleLang = () => setIsArabic((v) => !v);
+  const toggleLang = () => setIsArabic(v => !v);
 
-  // ركّز على أول حقل مرة واحدة عند الجاهزية
+  // فوكس أول حقل عند الجاهزية
   useEffect(() => {
     if (phase === "ready" && !focusedOnce.current) {
       focusedOnce.current = true;
@@ -53,7 +51,7 @@ export default function UpdatePasswordPage() {
     }
   }, [phase]);
 
-  // التحقق من رابط Supabase وتثبيت الجلسة
+  // تثبيت جلسة Supabase من التوكنات في hash
   useEffect(() => {
     const run = async () => {
       try {
@@ -79,31 +77,32 @@ export default function UpdatePasswordPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const validate = (): string | null => {
-    if (password.length < 6)
+  // التحقق
+  const validate = (pwd: string, cfm: string): string | null => {
+    if (pwd.length < 6)
       return isArabic ? "يجب أن تكون كلمة المرور 6 أحرف على الأقل." : "Password must be at least 6 characters.";
-    if (/\s/.test(password))
+    if (/\s/.test(pwd))
       return isArabic ? "لا يمكن أن تحتوي كلمة المرور على مسافات." : "Password cannot contain spaces.";
-    if (password !== confirm)
+    if (pwd !== cfm)
       return isArabic ? "كلمتا المرور غير متطابقتين." : "Passwords do not match.";
     return null;
   };
 
   const handleUpdate = async () => {
     setMsg("");
-    const err = validate();
+    const pwd = passRef.current?.value ?? "";
+    const cfm = confirmRef.current?.value ?? "";
+
+    const err = validate(pwd, cfm);
     if (err) return setMsg(err);
 
     setPhase("updating");
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-      setMsg(error.message);
-      setPhase("ready");
-    } else {
-      setPhase("done");
-    }
+    const { error } = await supabase.auth.updateUser({ password: pwd });
+    if (error) { setMsg(error.message); setPhase("ready"); }
+    else { setPhase("done"); }
   };
 
+  // كارت
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div style={{ minHeight: "calc(100vh - 64px)", display: "grid", placeItems: "center", padding: 24 }}>
       <div
@@ -122,36 +121,25 @@ export default function UpdatePasswordPage() {
     </div>
   );
 
+  // input + عين (غير متحكَّم)
   const InputWithEye = ({
-    inputRef,
-    value,
-    onChange,
-    placeholder,
-    shown,
-    setShown,
-    className,
-    fieldId,
-    fieldName,
+    inputRef, placeholder, shown, setShown, className, fieldId,
   }: {
     inputRef: React.RefObject<HTMLInputElement>;
-    value: string;
-    onChange: (v: string) => void;
     placeholder: string;
     shown: boolean;
     setShown: (v: boolean) => void;
     className?: string;
     fieldId: string;
-    fieldName: string;
   }) => (
     <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
       <input
         ref={inputRef}
         id={fieldId}
-        name={fieldName}
+        // متعمد: لا تضف name حتى لا يتدخل Password Manager
         type={shown ? "text" : "password"}
         placeholder={placeholder}
-        value={value}
-        autoComplete="off"
+        autoComplete="new-password"
         autoCorrect="off"
         autoCapitalize="none"
         aria-autocomplete="none"
@@ -159,7 +147,6 @@ export default function UpdatePasswordPage() {
         inputMode="text"
         data-lpignore="true"
         data-1p-ignore
-        onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
         className={className}
         style={{
@@ -174,14 +161,12 @@ export default function UpdatePasswordPage() {
       />
       <button
         type="button"
-        aria-label={
-          shown
-            ? isArabic ? "إخفاء كلمة المرور" : "Hide password"
-            : isArabic ? "إظهار كلمة المرور" : "Show password"
-        }
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}  // لا يأخذ الفوكس
+        onClick={() => setShown(!shown)}
+        aria-label={shown ? (isArabic ? "إخفاء كلمة المرور" : "Hide password")
+                          : (isArabic ? "إظهار كلمة المرور" : "Show password")}
         title={shown ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
-        onMouseDown={(e) => e.preventDefault()}   // يمنع فقدان الفوكس
-        onClick={() => setShown(!shown)}          // بدون إعادة focus
         style={{
           position: "absolute",
           right: 10,
@@ -221,18 +206,8 @@ export default function UpdatePasswordPage() {
           <p style={{ color: "#ff6b6b", marginBottom: 8 }}>
             {msg || (isArabic ? "رابط غير صالح." : "Invalid link.")}
           </p>
-          <p
-            style={{
-              fontSize: 12,
-              color: "var(--muted)",
-              marginTop: 0,
-              direction: isArabic ? "rtl" : "ltr",
-              textAlign: isArabic ? "right" : "left",
-            }}
-          >
-            {isArabic
-              ? "جرّب طلب رابط إعادة تعيين جديد من صفحة تسجيل الدخول."
-              : "Try requesting a new reset link from the login page."}
+          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 0, direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
+            {isArabic ? "جرّب طلب رابط إعادة تعيين جديد من صفحة تسجيل الدخول." : "Try requesting a new reset link from the login page."}
           </p>
         </Card>
       )}
@@ -240,11 +215,7 @@ export default function UpdatePasswordPage() {
       {phase === "done" && (
         <Card>
           <h3 style={{ marginTop: 0 }}>{isArabic ? "تم تحديث كلمة المرور" : "Password updated"}</h3>
-          <p>
-            {isArabic
-              ? "يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal."
-              : "You can close this tab and log in to Tactic Portal."}
-          </p>
+          <p>{isArabic ? "يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal." : "You can close this tab and log in to Tactic Portal."}</p>
         </Card>
       )}
 
@@ -255,26 +226,20 @@ export default function UpdatePasswordPage() {
           <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <InputWithEye
               inputRef={passRef}
-              value={password}
-              onChange={(v) => setPassword(v)}
               placeholder={isArabic ? "كلمة المرور الجديدة" : "New password"}
               shown={show1}
               setShown={setShow1}
               className="input-gold"
               fieldId={`np-${newPassId}`}
-              fieldName={`np-${newPassId}`}
             />
 
             <InputWithEye
               inputRef={confirmRef}
-              value={confirm}
-              onChange={(v) => setConfirm(v)}
               placeholder={isArabic ? "تأكيد كلمة المرور" : "Confirm new password"}
               shown={show2}
               setShown={setShow2}
               className="input-gold"
               fieldId={`cp-${confirmId}`}
-              fieldName={`cp-${confirmId}`}
             />
           </form>
 
@@ -300,19 +265,10 @@ export default function UpdatePasswordPage() {
 
           <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid var(--divider)" }} />
 
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--muted)",
-              direction: isArabic ? "rtl" : "ltr",
-              textAlign: isArabic ? "right" : "left",
-            }}
-          >
+          <div style={{ fontSize: 12, color: "var(--muted)", direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
             <strong>Tactic Portal</strong>
             <br />
-            {isArabic
-              ? "إذا لم تطلب ذلك، يمكنك تجاهل هذه الصفحة بأمان."
-              : "If you didn’t request this, you can safely ignore this page."}
+            {isArabic ? "إذا لم تطلب ذلك، يمكنك تجاهل هذه الصفحة بأمان." : "If you didn’t request this, you can safely ignore this page."}
           </div>
         </Card>
       )}

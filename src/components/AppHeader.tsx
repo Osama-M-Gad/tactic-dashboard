@@ -69,7 +69,7 @@ export default function AppHeader({
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {!logoFailed ? (
           <Image
-            src="/logo.png"   // تأكد من public/logo.png وأن الـ URL /logo.png يفتح في المتصفح
+            src="/logo.png"       // تأكد أن الملف موجود: public/logo.png
             alt="Tactic Portal"
             width={120}
             height={40}
