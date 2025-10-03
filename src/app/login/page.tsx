@@ -31,8 +31,6 @@ const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [isArabic, setIsArabic] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [username, setUsername] = useState("");
@@ -41,9 +39,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // منع التوجيه المتكرر
-  const redirectedOnce = useRef(false);
+  const router = useRouter();
 
   // ===== Reset Password Modal =====
   const [showResetModal, setShowResetModal] = useState(false);
@@ -74,14 +70,10 @@ export default function LoginPage() {
       return null;
     } catch { return null; }
   }
-
   function routeByRole(user: PortalUser) {
-    if (redirectedOnce.current) return;
-    redirectedOnce.current = true;
     const role = String(user?.role || "").toLowerCase();
     if (role === "super_admin") router.replace("/super-admin/dashboard");
     else if (role === "admin") router.replace("/admin/dashboard");
-    else router.replace("/no-access");
   }
 
   // Prefill username/remember + Theme
@@ -96,27 +88,24 @@ export default function LoginPage() {
     } catch {}
   }, []);
 
-  // داخل LoginPage useEffect بتاع الـ auto-redirect
-useEffect(() => {
-  (async () => {
+  // Auto-redirect + optional one-time refresh if Remember Me
+  useEffect(() => {
     const stored = getStoredUser();
-    if (!stored) return;
-
-    // تحقُّق من جلسة Supabase
-    const { data } = await supabase.auth.getSession();
-    const hasSession = !!data.session;
-
-    if (!hasSession) {
-      // مفيش جلسة فعلية: امسح currentUser واتركه يكمل لوجين طبيعي
-      try { localStorage.removeItem("currentUser"); sessionStorage.removeItem("currentUser"); } catch {}
-      return;
+    if (stored) {
+      routeByRole(stored);
+      try {
+        const rememberFlag = localStorage.getItem("rememberMe") === "1";
+        const didAutoRefresh = sessionStorage.getItem("did_auto_refresh") === "1";
+        if (rememberFlag && !didAutoRefresh) {
+          setTimeout(() => {
+            sessionStorage.setItem("did_auto_refresh", "1");
+            window.location.reload();
+          }, 300);
+        }
+      } catch {}
     }
-
-    // لو فيه جلسة، وجِّه حسب الدور (وده هيشغّل جلب البيانات فى الداشبورد)
-    routeByRole(stored);
-  })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync remember
   useEffect(() => {
@@ -135,7 +124,7 @@ useEffect(() => {
     setErrorMsg("");
     setLoading(true);
     try {
-      // 1) نجيب المستخدم باليوزر نيم
+      // 1) نجيب المستخدم باليوزر نيم (ونقرأ password للـ fallback)
       const { data: user, error: uErr } = await supabase
         .from("Users")
         .select("id, role, username, email, auth_user_id, password")
@@ -150,19 +139,29 @@ useEffect(() => {
       const isAdmin = role === "admin";
       if (!isSuper && !isAdmin) { setErrorMsg(TEXT.forbidden); return; }
 
-      // 3) محاولة تسجيل الدخول عبر Supabase Auth أو fallback لكلمة المرور في الجدول
+      // 3) نحاول عبر Supabase Auth لو فيه auth_user_id، وإلا نرجع للـ Users.password
       const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
       let signedIn = false;
       let authUserId: string | null = null;
 
       if (user.auth_user_id && email) {
+        // طريق Supabase Auth
         const { data: sIn, error: sInErr } = await supabase.auth.signInWithPassword({ email, password });
-        if (!sInErr && sIn?.user) { signedIn = true; authUserId = sIn.user.id; }
-        else { setErrorMsg(TEXT.wrong); return; }
+        if (!sInErr && sIn?.user) {
+          signedIn = true;
+          authUserId = sIn.user.id;
+        } else {
+          // عنده auth_user_id بس كلمة المرور غلط
+          setErrorMsg(TEXT.wrong);
+          return;
+        }
       } else {
+        // Fallback: جدول Users
         const tablePwd = typeof user.password === "string" ? user.password : "";
         if (tablePwd && password && tablePwd === password) {
           signedIn = true;
+
+          // محاولة ربط تلقائي (اختياري): نحاول نعمل signIn أو signUp في Supabase وربط auth_user_id
           if (email) {
             try {
               const { data: sIn2, error: sInErr2 } = await supabase.auth.signInWithPassword({ email, password });
@@ -171,6 +170,7 @@ useEffect(() => {
                 const { data: sUp, error: sUpErr } = await supabase.auth.signUp({ email, password });
                 if (sUp?.user && !sUpErr) authUserId = sUp.user.id;
               }
+
               if (authUserId) {
                 const { error: rpcErr } = await supabase.rpc("link_auth_user", {
                   p_user_id: user.id,
@@ -182,7 +182,10 @@ useEffect(() => {
               console.warn("[AUTH-LINK] unexpected:", linkErr);
             }
           }
-        } else { setErrorMsg(TEXT.wrong); return; }
+        } else {
+          setErrorMsg(TEXT.wrong);
+          return;
+        }
       }
 
       if (!signedIn) { setErrorMsg(TEXT.wrong); return; }
@@ -211,9 +214,9 @@ useEffect(() => {
 
       if (rememberMe) { try { localStorage.setItem("rememberedUsername", username.trim()); } catch {} }
 
-      // 5) توجيه نهائي بدون push أو reload
       const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
-      router.replace(target);
+      router.push(target);
+      setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
     } finally {
       setLoading(false);
     }
@@ -223,6 +226,7 @@ useEffect(() => {
     setResetMsg("");
     const email = resetEmail.trim();
 
+    // تحقق من صيغة الإيميل
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
       setResetMsg(isArabic ? "صيغة البريد غير صحيحة" : "Invalid email format");
@@ -231,6 +235,7 @@ useEffect(() => {
 
     setResetLoading(true);
     try {
+      // تأكد أن الإيميل موجود ومربوط بـ auth_user_id
       const { data: u, error: uErr } = await supabase
         .from("Users")
         .select("id, auth_user_id")
@@ -245,8 +250,11 @@ useEffect(() => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + "/update-password",
       });
-      if (error) setResetMsg(error.message);
-      else setResetMsg(isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent");
+      if (error) {
+        setResetMsg(error.message);
+      } else {
+        setResetMsg(isArabic ? "تم إرسال رابط إعادة التعيين إلى بريدك" : "Password reset link sent");
+      }
     } catch (err: unknown) {
       setResetMsg(err instanceof Error ? err.message : String(err));
     } finally {
