@@ -1,7 +1,9 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import "./globals.css";
-
+import GlobalHeader from "../components/GlobalHeader";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -17,33 +19,37 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Tactic Portal",
   description: "Tactic & Creativity Portal",
-  icons: {
-    // Change this to point to the local file in the public directory
-    icon: "/icon.png",
-  },
+  icons: { icon: "/icon.png" },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      {/* REMOVE THIS <head> BLOCK and its content completely,
-          as `metadata` object handles it automatically.
-          You typically don't put a <head> tag directly in RootLayout
-          when using the App Router's metadata API. */}
-      {/* <head>
-        <link
-          rel="icon"
-          href="https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files//icon.png"
-        />
-      </head> */}
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    // SSR يبدأ EN/Dark؛ هنطبّق المخزّن قبل الـ hydration
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/* طبّق اللغة والثيم من localStorage قبل أي رندر */}
+        <Script id="boot-lang-theme" strategy="beforeInteractive">
+          {`
+            try {
+              var lsLang = localStorage.getItem("lang");
+              var isAr = (lsLang === "ar");
+              document.documentElement.dir = isAr ? "rtl" : "ltr";
+              document.documentElement.lang = isAr ? "ar" : "en";
+
+              var lsTheme = localStorage.getItem("theme");
+              var theme = lsTheme || "dark";
+              document.documentElement.setAttribute("data-theme", theme);
+            } catch (_) {}
+          `}
+        </Script>
+      </head>
+
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <GlobalHeader />
+        {/* الهيدر sticky؛ مفيش padding-top */}
+        <main>{children}</main>
       </body>
     </html>
   );

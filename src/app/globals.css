@@ -19,40 +19,43 @@
   /* Chips/inputs */
   --chip-bg: #1f2228;
 
-  /* Inputs (خلفيات افتراضية للحقول) */
-  --input-bg: transparent;     /* نستخدم شفاف في الدارك */
+  /* Inputs */
+  --input-bg: transparent;
   --input-text: var(--text);
   --input-border: var(--divider);
   --input-placeholder: #9097a3;
   --input-focus: #f5a623;
+
+  /* Default header height */
+  --header-h: 72px;
 }
 
-/* ===== Light theme (عند data-theme="light") ===== */
+/* ===== Light theme ===== */
 :root[data-theme="light"] {
-  --bg: #f5f7fb;          /* الخلفية العامة بيضاء/رمادية فاتحة */
-  --header-bg: #000000;   /* الهيدر أسود واضح على الخلفية البيضاء */
+  --bg: #f5f7fb;
+  --header-bg: #000000;
   --card: #ffffff;
   --divider: #e6e8eb;
 
   --text: #111111;
   --muted: #555555;
 
-  /* أزرق في الفاتح عشان الدواير تبقى زرقا */
   --accent: #2563eb;            /* الأزرق */
-  --accent-foreground: #ffffff; /* نص أبيض على الأزرق */
+  --accent-foreground: #ffffff;
 
   --chip-bg: #f0f2f5;
 
-  /* Inputs في الوضع الفاتح */
   --input-bg: #ffffff;
   --input-text: #111111;
   --input-border: #d7d9de;
   --input-placeholder: #9aa1ac;
-  --input-focus: #2563eb;       /* نفس الأزرق عند الفوكس */
+  --input-focus: #2563eb;
 }
 
 /* ===== Base ===== */
 html, body {
+  height: 100%;
+  margin: 0;                    /* مهم عشان مفيش فراغ فوق/تحت */
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
@@ -60,14 +63,13 @@ html, body {
 
 a { color: inherit; text-decoration: none; }
 
-/* ===== Header (يعتمد على AppHeader) ===== */
+/* ===== Header ===== */
 [data-theme] .app-header {
   background: var(--header-bg);
   color: var(--text);
   border-bottom: 1px solid var(--divider);
 }
 
-/* لو بتحط كلاس للحاوية الداخلية للهيدر */
 .app-header-inner a,
 .app-header-inner button {
   color: inherit;
@@ -82,7 +84,7 @@ a { color: inherit; text-decoration: none; }
   border-radius: 12px;
 }
 
-/* ===== Inputs (حل مشكلة النص/الخلفية) ===== */
+/* ===== Inputs ===== */
 input[type="text"],
 input[type="password"],
 input[type="email"],
@@ -97,7 +99,7 @@ select {
   color: var(--input-text);
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
-  min-height: 38px; /* ثبات الارتفاع مع السلكت */
+  min-height: 38px;
 }
 
 input::placeholder,
@@ -105,16 +107,13 @@ textarea::placeholder {
   color: var(--input-placeholder);
 }
 
-/* Focus */
 input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--input-focus);
-  /* ملاحظة: color-mix مدعوم في المتصفحات الحديثة؛ آمن كـ fallback */
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--input-focus) 25%, transparent);
 }
 
-/* Disabled */
 input:disabled,
 button:disabled {
   opacity: .7;
@@ -145,7 +144,7 @@ hr {
   .text-balance { text-wrap: balance; }
 }
 
-/* Gold stroke for inputs (تحديد ذهبي خفيف) */
+/* Gold stroke */
 .input-gold {
   border: 1px solid var(--input-border);
   box-shadow: 0 0 0 1px var(--accent);
@@ -156,15 +155,15 @@ hr {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-/* Logo في الهيدر */
+/* Logo responsive */
 .app-header img { height: 56px; width: auto; }
 @media (max-width: 640px) {
   .app-header img { height: 44px; }
 }
 
-/* تحسين شكل السلكت/التاريخ وتوحيد العرض في سطر */
+/* Select/date uniform */
 select,
 input[type="date"] {
   appearance: none;
-  min-width: 180px; /* ثابت زي حقول التاريخ */
+  min-width: 180px;
 }

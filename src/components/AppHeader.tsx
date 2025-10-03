@@ -20,20 +20,15 @@ export default function AppHeader({
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [logoFailed, setLogoFailed] = useState(false);
 
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.documentElement.dir = isArabic ? "rtl" : "ltr";
-      localStorage.setItem("lang", isArabic ? "ar" : "en");
-    }
-  }, [isArabic]);
+  // 👇 شلنا أي useEffect بيتعامل مع dir/lang — ده مسئولية GlobalHeader + boot script
 
+  // اقرا/طبّق الثيم
   useEffect(() => {
     if (typeof document === "undefined") return;
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
     const preferred: "dark" | "light" =
       saved ??
-      (window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light");
     setTheme(preferred);
@@ -61,22 +56,19 @@ export default function AppHeader({
         padding: "10px 20px",
         borderBottom: "1px solid var(--divider)",
         minHeight: 72,
-        position: "sticky",
-        top: 0,
-        zIndex: 20,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {!logoFailed ? (
           <Image
-  src="/logo.png"
-  alt="Tactic Portal"
-  width={200}        // كان 140
-  height={60}        // أو 70 حسب شكل اللوجو
-  priority
-  style={{ height: 56, width: "auto" }}   // كان 40؛ تقدر تخليها 60 لو حابب
-  onError={() => setLogoFailed(true)}
-/>
+            src="/logo.png"
+            alt="Tactic Portal"
+            width={200}
+            height={60}
+            priority
+            style={{ height: 56, width: "auto" }}
+            onError={() => setLogoFailed(true)}
+          />
         ) : (
           <strong style={{ fontSize: 18 }}>Tactic Portal</strong>
         )}
@@ -96,7 +88,10 @@ export default function AppHeader({
             fontSize: "0.9rem",
           }}
         >
-          {isArabic ? "الموقع التعريفي" : "Company Site"}
+          {/* ✅ منع الـ hydration mismatch للنص */}
+          <span suppressHydrationWarning>
+            {isArabic ? "الموقع التعريفي" : "Company Site"}
+          </span>
         </Link>
 
         {showLogout && (
@@ -113,7 +108,9 @@ export default function AppHeader({
               cursor: "pointer",
             }}
           >
-            {isArabic ? "تسجيل الخروج" : "Logout"}
+            <span suppressHydrationWarning>
+              {isArabic ? "تسجيل الخروج" : "Logout"}
+            </span>
           </button>
         )}
 
@@ -130,7 +127,7 @@ export default function AppHeader({
             cursor: "pointer",
           }}
         >
-          {isArabic ? "EN" : "AR"}
+          <span suppressHydrationWarning>{isArabic ? "EN" : "AR"}</span>
         </button>
 
         <button
@@ -147,13 +144,12 @@ export default function AppHeader({
             cursor: "pointer",
           }}
         >
-          {theme === "dark"
-            ? isArabic
-              ? "فاتح"
-              : "Light"
-            : isArabic
-            ? "داكن"
-            : "Dark"}
+          {/* برضه نخلي النص محمي من mismatch لأنه بيعتمد على theme + lang */}
+          <span suppressHydrationWarning>
+            {theme === "dark"
+              ? isArabic ? "فاتح" : "Light"
+              : isArabic ? "داكن" : "Dark"}
+          </span>
         </button>
       </div>
     </div>

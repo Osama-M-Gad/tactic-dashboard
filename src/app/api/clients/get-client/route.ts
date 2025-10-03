@@ -22,9 +22,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "client_code or id required" }, { status: 400 });
     }
 
-    // أنشئ supabase client داخل الهاندلر لتفادي مشاكل وقت الـ build
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+      return NextResponse.json({ error: "Supabase env vars missing" }, { status: 500 });
+    }
+
     const supabase = createClient(url, key);
 
     let query = supabase
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
     const { data, error } = await query.maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    if (!data) return NextResponse.json({ client: null });
+    if (!data) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
     const client: ClientRow = {
       client_code: data.client_code,
