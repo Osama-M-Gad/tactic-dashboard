@@ -13,7 +13,7 @@
   /* Text & accents */
   --text: #f5f7fb;
   --muted: #9aa1ac;
-  --accent: #f5a623;
+  --accent: #f5a623;            /* أصفر في الدارك */
   --accent-foreground: #000;
 
   /* Chips/inputs */
@@ -36,8 +36,10 @@
 
   --text: #111111;
   --muted: #555555;
-  --accent: #f5a623;
-  --accent-foreground: #000;
+
+  /* أزرق في الفاتح عشان الدواير تبقى زرقا */
+  --accent: #2563eb;            /* الأزرق */
+  --accent-foreground: #ffffff; /* نص أبيض على الأزرق */
 
   --chip-bg: #f0f2f5;
 
@@ -46,7 +48,7 @@
   --input-text: #111111;
   --input-border: #d7d9de;
   --input-placeholder: #9aa1ac;
-  --input-focus: #f5a623;
+  --input-focus: #2563eb;       /* نفس الأزرق عند الفوكس */
 }
 
 /* ===== Base ===== */
@@ -58,7 +60,7 @@ html, body {
 
 a { color: inherit; text-decoration: none; }
 
-/* ===== Header resets (يعتمد على AppHeader) ===== */
+/* ===== Header (يعتمد على AppHeader) ===== */
 [data-theme] .app-header {
   background: var(--header-bg);
   color: var(--text);
@@ -80,10 +82,11 @@ a { color: inherit; text-decoration: none; }
   border-radius: 12px;
 }
 
-/* ===== Inputs (علاج مشكلة النص الأبيض على خلفية بيضاء) ===== */
+/* ===== Inputs (حل مشكلة النص/الخلفية) ===== */
 input[type="text"],
 input[type="password"],
 input[type="email"],
+input[type="date"],
 textarea,
 select {
   width: 100%;
@@ -94,6 +97,7 @@ select {
   color: var(--input-text);
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
+  min-height: 38px; /* ثبات الارتفاع مع السلكت */
 }
 
 input::placeholder,
@@ -106,6 +110,7 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--input-focus);
+  /* ملاحظة: color-mix مدعوم في المتصفحات الحديثة؛ آمن كـ fallback */
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--input-focus) 25%, transparent);
 }
 
@@ -139,7 +144,8 @@ hr {
 @layer utilities {
   .text-balance { text-wrap: balance; }
 }
-/* Gold stroke for inputs */
+
+/* Gold stroke for inputs (تحديد ذهبي خفيف) */
 .input-gold {
   border: 1px solid var(--input-border);
   box-shadow: 0 0 0 1px var(--accent);
@@ -149,8 +155,16 @@ hr {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent);
 }
+
+/* Logo في الهيدر */
 .app-header img { height: 56px; width: auto; }
 @media (max-width: 640px) {
   .app-header img { height: 44px; }
 }
 
+/* تحسين شكل السلكت/التاريخ وتوحيد العرض في سطر */
+select,
+input[type="date"] {
+  appearance: none;
+  min-width: 180px; /* ثابت زي حقول التاريخ */
+}
