@@ -60,7 +60,7 @@ export default function AppHeader({
         alignItems: "center",
         padding: "10px 20px",
         borderBottom: "1px solid var(--divider)",
-        minHeight: 64,
+        minHeight: 72,
         position: "sticky",
         top: 0,
         zIndex: 20,
@@ -69,14 +69,14 @@ export default function AppHeader({
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {!logoFailed ? (
           <Image
-            src="/logo.png"       
-            alt="Tactic Portal"
-            width={140}
-            height={60}
-            priority
-            style={{ height: 40, width: "auto" }}
-            onError={() => setLogoFailed(true)}
-          />
+  src="/logo.png"
+  alt="Tactic Portal"
+  width={200}        // كان 140
+  height={60}        // أو 70 حسب شكل اللوجو
+  priority
+  style={{ height: 56, width: "auto" }}   // كان 40؛ تقدر تخليها 60 لو حابب
+  onError={() => setLogoFailed(true)}
+/>
         ) : (
           <strong style={{ fontSize: 18 }}>Tactic Portal</strong>
         )}
