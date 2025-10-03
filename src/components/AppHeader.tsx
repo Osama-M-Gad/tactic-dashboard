@@ -71,8 +71,8 @@ export default function AppHeader({
           <Image
             src="/logo.png"       
             alt="Tactic Portal"
-            width={120}
-            height={40}
+            width={140}
+            height={60}
             priority
             style={{ height: 40, width: "auto" }}
             onError={() => setLogoFailed(true)}
