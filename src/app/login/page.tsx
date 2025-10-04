@@ -277,272 +277,291 @@ export default function LoginPage() {
     "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
 
   return (
+  <div style={{ minHeight: "100dvh", position: "relative" }}>
+    {/* خلفية ملء الشاشة */}
     <div
+      aria-hidden
       style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100vh",
         backgroundImage:
           "url('https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        zIndex: 0,
+        transform: "translateZ(0)",
+      }}
+    />
+    {/* طبقة تعتيم حسب الثيم */}
+    <div
+      aria-hidden
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1,
+        background: isDark ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.25)",
+        backdropFilter: "blur(1px)",
+      }}
+    />
+
+    {/* Body */}
+    <div
+      style={{
+        position: "relative",
+        zIndex: 2,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
         minHeight: "100dvh",
+        padding: "24px 12px",
       }}
     >
-      {/* Body */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100dvh",
-          padding: "24px 12px",
+          backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(255,255,255,0.9)",
+          padding: "2rem",
+          borderRadius: "8px",
+          width: "min(350px, 92vw)",
+          textAlign: "center",
+          color: isDark ? "#fff" : "#000",
+          border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
         }}
       >
-        <div
+        <Image
+          src={LOGO}
+          alt="Tactic Logo"
+          width={200}
+          height={80}
+          style={{ width: "200px", margin: "0 auto 20px auto", display: "block" }}
+          unoptimized
+        />
+
+        <h2 style={{ marginBottom: "1rem", whiteSpace: "pre-line" }} suppressHydrationWarning>
+          {mounted
+            ? (isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in")
+            : "Welcome Back\nKindly log in"}
+        </h2>
+
+        {/* Username */}
+        <input
+          type="text"
+          placeholder={isArabic ? "اسم المستخدم" : "User Name"}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          onKeyDown={onKeyDown}
           style={{
-            backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(255,255,255,0.9)",
-            padding: "2rem",
-            borderRadius: "8px",
-            width: "350px",
-            textAlign: "center",
-            color: isDark ? "#fff" : "#000",
-            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            display: "block",
+            width: "100%",
+            padding: "10px",
+            marginBottom: "1rem",
+            borderRadius: "6px",
+            border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
+            background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
+            color: isDark ? "#fff" : "#111",
+            outline: "none",
           }}
-        >
-          <Image
-            src={LOGO}
-            alt="Tactic Logo"
-            width={200}
-            height={80}
-            style={{ width: "200px", margin: "0 auto 20px auto", display: "block" }}
-            unoptimized
-          />
+          autoComplete="username"
+        />
 
-          <h2 style={{ marginBottom: "1rem", whiteSpace: "pre-line" }} suppressHydrationWarning>
-            {mounted
-              ? (isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in")
-              : "Welcome Back\nKindly log in"}
-          </h2>
-
-          {/* Username */}
+        {/* Password + Eye */}
+        <div style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
           <input
-            type="text"
-            placeholder={isArabic ? "اسم المستخدم" : "User Name"}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            ref={passwordInputRef}
+            type={showPassword ? "text" : "password"}
+            placeholder={isArabic ? "كلمة المرور" : "Password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             onKeyDown={onKeyDown}
             style={{
               display: "block",
               width: "100%",
-              padding: "10px",
-              marginBottom: "1rem",
+              padding: "10px 44px 10px 12px",
               borderRadius: "6px",
               border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
               background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
               color: isDark ? "#fff" : "#111",
               outline: "none",
             }}
-            autoComplete="username"
+            autoComplete="current-password"
           />
-
-          {/* Password + Eye */}
-          <div style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
-            <input
-              ref={passwordInputRef}
-              type={showPassword ? "text" : "password"}
-              placeholder={isArabic ? "كلمة المرور" : "Password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={onKeyDown}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "10px 44px 10px 12px",
-                borderRadius: "6px",
-                border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
-                background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
-                color: isDark ? "#fff" : "#111",
-                outline: "none",
-              }}
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setShowPassword((s: boolean) => !s);
-                passwordInputRef.current?.focus();
-              }}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isDark ? "#d1d5db" : "#666",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = isDark ? "#d1d5db" : "#666")}
-            >
-              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-              fontSize: "0.9rem",
-              color: isDark ? "#fff" : "#000",
-            }}
-          >
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              {isArabic ? "تذكرني" : "Remember me"}
-            </label>
-            <a
-              href="#"
-              onClick={() => setShowResetModal(true)}
-              style={{ color: "#f5a623", textDecoration: "none" }}
-            >
-              {isArabic ? "نسيت كلمة المرور؟" : "Forget Password?"}
-            </a>
-          </div>
-
-          {errorMsg && <p style={{ color: "red", marginBottom: "1rem" }}>{errorMsg}</p>}
-
           <button
-            onClick={handleLogin}
-            disabled={loading}
-            style={{
-              backgroundColor: "#f5a623",
-              color: "#000",
-              padding: "10px",
-              width: "100%",
-              border: "none",
-              borderRadius: "4px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
+            type="button"
+            onClick={() => {
+              setShowPassword((s: boolean) => !s);
+              passwordInputRef.current?.focus();
             }}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
+            style={{
+              position: "absolute",
+              right: "10px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: isDark ? "#d1d5db" : "#666",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = isDark ? "#d1d5db" : "#666")}
           >
-            {loading ? (isArabic ? "جارٍ تسجيل الدخول..." : "Signing in...") : (isArabic ? "تسجيل الدخول" : "Sign in")}
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
-      </div>
 
-      {/* Reset Password Modal */}
-      {showResetModal && (
         <div
           style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.6)",
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "space-between",
             alignItems: "center",
-            zIndex: 50,
+            marginBottom: "1rem",
+            fontSize: "0.9rem",
+            color: isDark ? "#fff" : "#000",
           }}
-          role="dialog"
-          aria-modal="true"
         >
-          <div
-            style={{
-              background: "#111",
-              color: "#fff",
-              padding: 20,
-              borderRadius: 8,
-              width: 360,
-              boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              textAlign: "center",
-            }}
-          >
-            <h3 style={{ marginBottom: 12 }}>
-              {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
-            </h3>
-
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
-              type="email"
-              placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
-              value={resetEmail}
-              onChange={(e) => setResetEmail(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                margin: "10px 0 6px",
-                borderRadius: 6,
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
-                outline: "none",
-              }}
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
             />
+            {isArabic ? "تذكرني" : "Remember me"}
+          </label>
+          <a href="#" onClick={() => setShowResetModal(true)} style={{ color: "#f5a623", textDecoration: "none" }}>
+            {isArabic ? "نسيت كلمة المرور؟" : "Forget Password?"}
+          </a>
+        </div>
 
-            {resetMsg && (
-              <p
-                style={{
-                  margin: "6px 0 10px",
-                  fontSize: "0.9rem",
-                  color: resetMsg.includes("sent") || resetMsg.includes("تم") ? "#22c55e" : "#ef4444",
-                }}
-              >
-                {resetMsg}
-              </p>
-            )}
+        {errorMsg && <p style={{ color: "red", marginBottom: "1rem" }}>{errorMsg}</p>}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-              <button
-                onClick={handleResetPassword}
-                disabled={resetLoading}
-                style={{
-                  flex: 1,
-                  background: "#f5a623",
-                  color: "#000",
-                  border: "none",
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  fontWeight: "bold",
-                }}
-              >
-                {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
-              </button>
+        <button
+          onClick={handleLogin}
+          disabled={loading}
+          style={{
+            backgroundColor: "#f5a623",
+            color: "#000",
+            padding: "10px",
+            width: "100%",
+            border: "none",
+            borderRadius: "4px",
+            fontWeight: "bold",
+            cursor: loading ? "not-allowed" : "pointer",
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {loading ? (isArabic ? "جارٍ تسجيل الدخول..." : "Signing in...") : (isArabic ? "تسجيل الدخول" : "Sign in")}
+        </button>
+      </div>
+    </div>
 
-              <button
-                onClick={() => {
-                  setShowResetModal(false);
-                  setResetEmail("");
-                  setResetMsg("");
-                }}
-                style={{
-                  flex: 1,
-                  background: "#ef4444",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                }}
-              >
-                {isArabic ? "إلغاء" : "Cancel"}
-              </button>
-            </div>
+    {/* Reset Password Modal */}
+    {showResetModal && (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 50,
+        }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          style={{
+            background: "#111",
+            color: "#fff",
+            padding: 20,
+            borderRadius: 8,
+            width: 360,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            textAlign: "center",
+          }}
+        >
+          <h3 style={{ marginBottom: 12 }}>
+            {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
+          </h3>
+
+          <input
+            type="email"
+            placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
+            value={resetEmail}
+            onChange={(e) => setResetEmail(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              margin: "10px 0 6px",
+              borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              outline: "none",
+            }}
+          />
+
+          {resetMsg && (
+            <p
+              style={{
+                margin: "6px 0 10px",
+                fontSize: "0.9rem",
+                color: resetMsg.includes("sent") || resetMsg.includes("تم") ? "#22c55e" : "#ef4444",
+              }}
+            >
+              {resetMsg}
+            </p>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetLoading}
+              style={{
+                flex: 1,
+                background: "#f5a623",
+                color: "#000",
+                border: "none",
+                padding: "10px 0",
+                borderRadius: 6,
+                fontWeight: "bold",
+              }}
+            >
+              {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
+            </button>
+
+            <button
+              onClick={() => {
+                setShowResetModal(false);
+                setResetEmail("");
+                setResetMsg("");
+              }}
+              style={{
+                flex: 1,
+                background: "#ef4444",
+                color: "#fff",
+                border: "none",
+                padding: "10px 0",
+                borderRadius: 6,
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              {isArabic ? "إلغاء" : "Cancel"}
+            </button>
           </div>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 }

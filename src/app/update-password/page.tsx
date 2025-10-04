@@ -1,7 +1,9 @@
+// app/update-password/page.tsx
 "use client";
+
 import { useEffect, useRef, useState, useId } from "react";
 import { supabase } from "@/utils/supabaseClient";
-import AppHeader from "@/components/AppHeader";
+import { useLangTheme } from "@/hooks/useLangTheme";
 
 type Phase = "verifying" | "ready" | "updating" | "done" | "error";
 
@@ -21,6 +23,8 @@ const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function UpdatePasswordPage() {
+  const { isArabic } = useLangTheme();
+
   const [phase, setPhase] = useState<Phase>("verifying");
   const [msg, setMsg] = useState("");
 
@@ -28,20 +32,14 @@ export default function UpdatePasswordPage() {
   const [show1, setShow1] = useState(false);
   const [show2, setShow2] = useState(false);
 
-  // refs للكتابة بدون فقدان فوكس (uncontrolled)
+  // refs (uncontrolled inputs عشان ميضيعش الفوكس)
   const passRef = useRef<HTMLInputElement | null>(null);
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const focusedOnce = useRef(false);
 
-  // IDs فريدة لتجنب أي استدلال من مدير كلمات السر
+  // IDs عشوائية لتفادي تدخل Password Manager
   const newPassId = useId();
   const confirmId = useId();
-
-  // اللغة من الهيدر
-  const [isArabic, setIsArabic] = useState<boolean>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("lang") === "ar" : false
-  );
-  const toggleLang = () => setIsArabic(v => !v);
 
   // فوكس أول حقل عند الجاهزية
   useEffect(() => {
@@ -51,7 +49,7 @@ export default function UpdatePasswordPage() {
     }
   }, [phase]);
 
-  // تثبيت جلسة Supabase من التوكنات في hash
+  // تثبيت جلسة Supabase من التوكنات في الـ hash
   useEffect(() => {
     const run = async () => {
       try {
@@ -59,22 +57,21 @@ export default function UpdatePasswordPage() {
         const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
         const access_token = hash.get("access_token");
         const refresh_token = hash.get("refresh_token");
-        if (!access_token || !refresh_token)
-          throw new Error(isArabic ? "رابط غير صالح." : "Invalid reset link.");
+        if (!access_token || !refresh_token) throw new Error("INVALID");
 
         const { error } = await supabase.auth.setSession({ access_token, refresh_token });
         if (error) throw error;
 
+        // نظّف الـ hash من الشريط
         window.history.replaceState({}, "", url.origin + url.pathname);
         setPhase("ready");
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        setMsg(message || (isArabic ? "الرابط غير صالح أو منتهي." : "Invalid or expired link."));
+      } catch {
+        // سيب الرسالة فاضية وخليها تترجم في العرض حسب اللغة
+        setMsg("");
         setPhase("error");
       }
     };
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // التحقق
@@ -98,16 +95,27 @@ export default function UpdatePasswordPage() {
 
     setPhase("updating");
     const { error } = await supabase.auth.updateUser({ password: pwd });
-    if (error) { setMsg(error.message); setPhase("ready"); }
-    else { setPhase("done"); }
+    if (error) {
+      setMsg(error.message);
+      setPhase("ready");
+    } else {
+      setPhase("done");
+    }
   };
 
-  // كارت
+  // كارت مركزي صغير
   const Card = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ minHeight: "calc(100vh - 64px)", display: "grid", placeItems: "center", padding: 24 }}>
+    <div
+      style={{
+        minHeight: "calc(100vh - var(--header-h))",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+      }}
+    >
       <div
         style={{
-          width: 420,
+          width: "min(420px, 94vw)",
           background: "var(--card)",
           color: "var(--text)",
           padding: 20,
@@ -121,7 +129,7 @@ export default function UpdatePasswordPage() {
     </div>
   );
 
-  // input + عين (غير متحكَّم)
+  // input + عين (uncontrolled)
   const InputWithEye = ({
     inputRef, placeholder, shown, setShown, className, fieldId,
   }: {
@@ -136,7 +144,7 @@ export default function UpdatePasswordPage() {
       <input
         ref={inputRef}
         id={fieldId}
-        // متعمد: لا تضف name حتى لا يتدخل Password Manager
+        // متعمد: بدون name لتقليل تدخل Password Manager
         type={shown ? "text" : "password"}
         placeholder={placeholder}
         autoComplete="new-password"
@@ -147,7 +155,7 @@ export default function UpdatePasswordPage() {
         inputMode="text"
         data-lpignore="true"
         data-1p-ignore
-        onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleUpdate()}
         className={className}
         style={{
           width: "100%",
@@ -162,10 +170,13 @@ export default function UpdatePasswordPage() {
       <button
         type="button"
         tabIndex={-1}
-        onMouseDown={(e) => e.preventDefault()}  // لا يأخذ الفوكس
+        onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => e.preventDefault()} // لا يأخذ الفوكس
         onClick={() => setShown(!shown)}
-        aria-label={shown ? (isArabic ? "إخفاء كلمة المرور" : "Hide password")
-                          : (isArabic ? "إظهار كلمة المرور" : "Show password")}
+        aria-label={
+          shown
+            ? (isArabic ? "إخفاء كلمة المرور" : "Hide password")
+            : (isArabic ? "إظهار كلمة المرور" : "Show password")
+        }
         title={shown ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
         style={{
           position: "absolute",
@@ -190,38 +201,58 @@ export default function UpdatePasswordPage() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
-      <AppHeader isArabic={isArabic} onToggleLang={toggleLang} showLogout={false} className="app-header" />
-
+    <div>
       {phase === "verifying" && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>Tactic Portal</h3>
+          <h3 style={{ marginTop: 0 }}>
+  {isArabic ? "منصّة تكتيك" : "Tactic Portal"}
+</h3>
           <p>{isArabic ? "جارٍ التحقق من رابط إعادة التعيين…" : "Verifying your reset link…"}</p>
         </Card>
       )}
 
       {phase === "error" && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>Tactic Portal</h3>
+          <h3 style={{ marginTop: 0 }}>
+  {isArabic ? "منصّة تكتيك" : "Tactic Portal"}
+</h3>
           <p style={{ color: "#ff6b6b", marginBottom: 8 }}>
-            {msg || (isArabic ? "رابط غير صالح." : "Invalid link.")}
+            {msg || (isArabic ? "رابط إعادة التعيين غير صالح." : "Invalid reset link.")}
           </p>
-          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 0, direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
-            {isArabic ? "جرّب طلب رابط إعادة تعيين جديد من صفحة تسجيل الدخول." : "Try requesting a new reset link from the login page."}
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--muted)",
+              marginTop: 0,
+              direction: isArabic ? "rtl" : "ltr",
+              textAlign: isArabic ? "right" : "left",
+            }}
+          >
+            {isArabic
+              ? "جرّب طلب رابط جديد من صفحة تسجيل الدخول."
+              : "Try requesting a new reset link from the login page."}
           </p>
         </Card>
       )}
 
       {phase === "done" && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>{isArabic ? "تم تحديث كلمة المرور" : "Password updated"}</h3>
-          <p>{isArabic ? "يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal." : "You can close this tab and log in to Tactic Portal."}</p>
+          <h3 style={{ marginTop: 0 }}>
+            {isArabic ? "تم تحديث كلمة المرور" : "Password updated"}
+          </h3>
+          <p>
+            {isArabic
+              ? "يمكنك إغلاق هذه الصفحة وتسجيل الدخول إلى Tactic Portal."
+              : "You can close this tab and log in to Tactic Portal."}
+          </p>
         </Card>
       )}
 
       {(phase === "ready" || phase === "updating") && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>{isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}</h3>
+          <h3 style={{ marginTop: 0 }}>
+            {isArabic ? "تعيين كلمة مرور جديدة" : "Set a new password"}
+          </h3>
 
           <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <InputWithEye
@@ -260,15 +291,32 @@ export default function UpdatePasswordPage() {
               opacity: phase === "updating" ? 0.7 : 1,
             }}
           >
-            {phase === "updating" ? (isArabic ? "جارٍ التحديث…" : "Updating…") : (isArabic ? "تحديث" : "Update")}
+            {phase === "updating"
+              ? (isArabic ? "جارٍ التحديث…" : "Updating…")
+              : (isArabic ? "تحديث" : "Update")}
           </button>
 
-          <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid var(--divider)" }} />
+          <hr
+            style={{
+              margin: "20px 0",
+              border: "none",
+              borderTop: "1px solid var(--divider)",
+            }}
+          />
 
-          <div style={{ fontSize: 12, color: "var(--muted)", direction: isArabic ? "rtl" : "ltr", textAlign: isArabic ? "right" : "left" }}>
-            <strong>Tactic Portal</strong>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--muted)",
+              direction: isArabic ? "rtl" : "ltr",
+              textAlign: isArabic ? "right" : "left",
+            }}
+          >
+            <strong>{isArabic ? "منصّة تكتيك" : "Tactic Portal"}</strong>
             <br />
-            {isArabic ? "إذا لم تطلب ذلك، يمكنك تجاهل هذه الصفحة بأمان." : "If you didn’t request this, you can safely ignore this page."}
+            {isArabic
+              ? "إذا لم تطلب ذلك، يمكنك تجاهل هذه الصفحة بأمان."
+              : "If you didn’t request this, you can safely ignore this page."}
           </div>
         </Card>
       )}

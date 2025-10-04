@@ -3,26 +3,37 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { logout } from "@/utils/session";
+import { useLangTheme } from "@/hooks/useLangTheme";
 
 type Props = {
-  isArabic: boolean;
   onToggleLang: () => void;
   showLogout?: boolean;
   className?: string;
 };
 
 export default function AppHeader({
-  isArabic,
   onToggleLang,
   showLogout = true,
   className,
 }: Props) {
+  // المصدر الوحيد للحقيقة
+  const { isArabic: liveArabic } = useLangTheme();
+  const langIsArabic = liveArabic; // ← دايمًا من الهوك
+
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [logoFailed, setLogoFailed] = useState(false);
 
-  // 👇 شلنا أي useEffect بيتعامل مع dir/lang — ده مسئولية GlobalHeader + boot script
+  // ثبّت dir من localStorage أول ما الهيدر يركب (يحل مشكلة ما بعد اللوجين)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const el = document.documentElement;
+    const ls = localStorage.getItem("lang"); // "ar" | "en" | null
+    const shouldAr = ls === "ar" || el.getAttribute("dir") === "rtl";
+    const wantDir = shouldAr ? "rtl" : "ltr";
+    if (el.getAttribute("dir") !== wantDir) el.setAttribute("dir", wantDir);
+  }, []);
 
-  // اقرا/طبّق الثيم
+  // ثيم
   useEffect(() => {
     if (typeof document === "undefined") return;
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
@@ -41,6 +52,19 @@ export default function AppHeader({
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  // Toggle قوي: يحدّث dir + localStorage ثم ينادي منطقك
+  const handleToggleLang = () => {
+    if (typeof document !== "undefined") {
+      const el = document.documentElement;
+      const nowAr = el.getAttribute("dir") === "rtl" || localStorage.getItem("lang") === "ar";
+      const next = nowAr ? "en" : "ar";
+      el.setAttribute("dir", next === "ar" ? "rtl" : "ltr");
+      localStorage.setItem("lang", next);
+      window.dispatchEvent(new StorageEvent("storage", { key: "lang", newValue: next }));
+    }
+    onToggleLang?.();
+  };
 
   return (
     <div
@@ -88,9 +112,8 @@ export default function AppHeader({
             fontSize: "0.9rem",
           }}
         >
-          {/* ✅ منع الـ hydration mismatch للنص */}
           <span suppressHydrationWarning>
-            {isArabic ? "الموقع التعريفي" : "Company Site"}
+            {langIsArabic ? "الموقع التعريفي" : "Company Site"}
           </span>
         </Link>
 
@@ -109,13 +132,13 @@ export default function AppHeader({
             }}
           >
             <span suppressHydrationWarning>
-              {isArabic ? "تسجيل الخروج" : "Logout"}
+              {langIsArabic ? "تسجيل الخروج" : "Logout"}
             </span>
           </button>
         )}
 
         <button
-          onClick={onToggleLang}
+          onClick={handleToggleLang}
           style={{
             backgroundColor: "var(--accent)",
             color: "var(--accent-foreground)",
@@ -127,7 +150,9 @@ export default function AppHeader({
             cursor: "pointer",
           }}
         >
-          <span suppressHydrationWarning>{isArabic ? "EN" : "AR"}</span>
+          <span suppressHydrationWarning>
+            {langIsArabic ? "EN" : "AR"}
+          </span>
         </button>
 
         <button
@@ -144,11 +169,10 @@ export default function AppHeader({
             cursor: "pointer",
           }}
         >
-          {/* برضه نخلي النص محمي من mismatch لأنه بيعتمد على theme + lang */}
           <span suppressHydrationWarning>
             {theme === "dark"
-              ? isArabic ? "فاتح" : "Light"
-              : isArabic ? "داكن" : "Dark"}
+              ? (langIsArabic ? "فاتح" : "Light")
+              : (langIsArabic ? "داكن" : "Dark")}
           </span>
         </button>
       </div>

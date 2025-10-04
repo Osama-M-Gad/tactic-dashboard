@@ -1,10 +1,14 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import GlobalHeader from "../components/GlobalHeader";
+import { ToastProvider } from "@/components/ui/Toast";
+import GlobalHeader from "@/components/GlobalHeader"; 
+import ResponsiveContainer from "@/components/ResponsiveContainer";
 
+/* ===== Local Geist fonts (Arabic + base fallback) ===== */
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -14,6 +18,14 @@ const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
   weight: "100 900",
+});
+
+/* ===== Modern English font (Google) ===== */
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-en",
 });
 
 export const metadata: Metadata = {
@@ -26,10 +38,9 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    // SSR يبدأ EN/Dark؛ هنطبّق المخزّن قبل الـ hydration
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
-        {/* طبّق اللغة والثيم من localStorage قبل أي رندر */}
+        {/* يطبّق اللغة/الثيم قبل الـ hydration لتفادي أي mismatch */}
         <Script id="boot-lang-theme" strategy="beforeInteractive">
           {`
             try {
@@ -46,11 +57,21 @@ export default function RootLayout({
         </Script>
       </head>
 
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <GlobalHeader />
-        {/* الهيدر sticky؛ مفيش padding-top */}
-        <main>{children}</main>
-      </body>
+      <body
+  className={`
+    ${geistSans.variable}
+    ${geistMono.variable}
+    ${jakarta.variable}
+    antialiased
+  `}
+>
+  <ToastProvider>
+    <GlobalHeader />
+    <ResponsiveContainer>
+      <main>{children}</main>
+    </ResponsiveContainer>
+  </ToastProvider>
+</body>
     </html>
   );
 }
