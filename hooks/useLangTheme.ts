@@ -19,7 +19,16 @@ export function useLangTheme() {
       const themeLS = localStorage.getItem("theme");
 
       setIsArabic(el.dir === "rtl" || langLS === "ar");
+
+      // ✅ دايمًا نبدأ dark لو مفيش حاجة محفوظة أو حصل mismatch
       const t = themeAttr || themeLS || "dark";
+      if (t !== "dark" && t !== "light") {
+        localStorage.setItem("theme", "dark");
+        el.setAttribute("data-theme", "dark");
+        setIsDark(true);
+        return;
+      }
+
       setIsDark(t === "dark");
     };
 

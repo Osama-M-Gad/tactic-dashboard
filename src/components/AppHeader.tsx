@@ -33,16 +33,14 @@ export default function AppHeader({
     if (el.getAttribute("dir") !== wantDir) el.setAttribute("dir", wantDir);
   }, []);
 
-  // ثيم
+  // ثيم — الافتراضي دايمًا DARK (نتجاهل تفضيل النظام)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
-    const preferred: "dark" | "light" =
-      saved ??
-      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light");
-    setTheme(preferred);
+    const initial: "dark" | "light" = saved ?? "dark";
+    setTheme(initial);
+    // نثبت الـ data-theme فورًا عند mount لتفادي أي flicker
+    document.documentElement.setAttribute("data-theme", initial);
   }, []);
 
   useEffect(() => {
@@ -170,9 +168,7 @@ export default function AppHeader({
           }}
         >
           <span suppressHydrationWarning>
-            {theme === "dark"
-              ? (langIsArabic ? "فاتح" : "Light")
-              : (langIsArabic ? "داكن" : "Dark")}
+            {theme === "dark" ? (langIsArabic ? "فاتح" : "Light") : (langIsArabic ? "داكن" : "Dark")}
           </span>
         </button>
       </div>
