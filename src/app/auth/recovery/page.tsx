@@ -91,7 +91,6 @@ export default function RecoveryPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       {/* الهيدر */}
       <AppHeader
-        isArabic={isArabic}
         onToggleLang={toggleLang}
         showLogout={false}
         className="app-header"

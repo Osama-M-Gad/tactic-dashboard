@@ -125,7 +125,6 @@ export default function SuperAdminDashboardPage() {
   return (
     <div style={{ background: "#000", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
       <AppHeader
-        isArabic={isArabic}
         onToggleLang={() => setIsArabic((s) => !s)}
         showLogout={true}
       />

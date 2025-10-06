@@ -374,7 +374,7 @@ export default function AddClientWizardMock() {
 
   return (
     <div style={wrapper}>
-      <AppHeader isArabic={isArabic} onToggleLang={() => setIsArabic((s) => !s)} showLogout />
+      <AppHeader onToggleLang={() => setIsArabic((s) => !s)} showLogout />
 
       <div style={{ maxWidth: 1100, margin: "24px auto", width: "100%", padding: "0 20px" }}>
         <h2 style={{ marginBottom: 8 }}>{T.title}</h2>

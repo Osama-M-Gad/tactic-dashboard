@@ -58,7 +58,6 @@ export default function GlobalHeader() {
   return (
     <div style={wrapStyle} ref={headerRef}>
       <AppHeader
-        isArabic={isArabic}
         onToggleLang={onToggleLang}
         showLogout={showLogout}
       />
