@@ -202,6 +202,7 @@ input[type="date"] {
   appearance: none;
   min-width: 180px;
 }
+
 /* ===== Toast ===== */
 .toast-wrap {
   position: fixed;
@@ -212,11 +213,10 @@ input[type="date"] {
   flex-direction: column;
   gap: 8px;
   z-index: 1000;
-  pointer-events: none; /* يمنع حجب الكليك عن الصفحة */
+  pointer-events: none;
 }
-
 .toast {
-  pointer-events: auto; /* يسمح بالنقر لإخفائه */
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -230,119 +230,91 @@ input[type="date"] {
   animation: toast-in .18s ease-out forwards;
   font-weight: 600;
 }
-
 .toast .dot {
   width: 8px; height: 8px; border-radius: 9999px; display: inline-block;
   box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 30%, transparent);
 }
-
 .toast.success { color: #b7ffcf; border-color: color-mix(in oklab, #00ff80 20%, var(--divider)); }
 .toast.success .dot { background: #16a34a; }
-
 .toast.error   { color: #ffd1d1; border-color: color-mix(in oklab, #ff3b30 25%, var(--divider)); }
 .toast.error .dot { background: #e11d48; }
-
 .toast.info    { color: #d9e6ff; border-color: color-mix(in oklab, #3b82f6 25%, var(--divider)); }
 .toast.info .dot { background: #3b82f6; }
-
 @keyframes toast-in {
   from { transform: translate(-50%, 12px); opacity: 0; }
   to   { transform: translate(-50%, 0); opacity: 1; }
 }
 @media (max-width: 640px) {
-  body {
-    font-size: 15px;
-  }
-
-  button {
-    font-size: 0.9rem;
-    padding: 10px 12px;
-  }
-
-  input {
-    min-height: 36px;
-  }
+  body { font-size: 15px; }
+  button { font-size: 0.9rem; padding: 10px 12px; }
+  input { min-height: 36px; }
 }
-/* Dropdown: افتح المنيو تكون بيضاء والنص أسود */
+
+/* ===== Light dropdown helper (optional per-element) ===== */
 select.light-dropdown option {
   background: #fff !important;
   color: #000 !important;
 }
-
-/* خليه واضح برضه على بعض المتصفحات */
-select.light-dropdown::-ms-value {
-  color: #000;
-}
-/* اجبر المتصفح يرسم عناصر التحكم بوضع داكن */
-input[type="date"].date-dark {
-  color-scheme: dark;
-}
-
-/* كروم/إيدج/سفاري: خلّي أيقونة الكالندر بيضاء */
-input[type="date"].date-dark::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.6);
-  opacity: .9;
-  cursor: pointer;
-}
-input[type="date"].date-dark::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-
-/* فايرفوكس: أضف آيكون أبيض كـ background */
-@-moz-document url-prefix() {
-  input[type="date"].date-dark {
-    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik03IDEwaDJ2Mkg3di0yem00IDBoMnYyaC0ydi0yem00IDBoMnYyaC0ydi0yek03IDE0aDJ2Mkg3di0yem00IDBoMnYyaC0ydi0yek0xOSA0aC0xVjJoLTJ2Mkg4VjJINnYyaC0xYy0xLjEgMC0yIC45LTIgMnYxMmMwIDEuMS45IDIgMiAyaDE0YzEuMSAwIDItLjkgMi0yVjZjMC0xLjEtLjktMi0yLTJ6bTAgMTZINVY5aDE0djExeiIvPjwvc3ZnPg==');
-    background-repeat: no-repeat;
-    background-position: right 8px center;
-    padding-inline-end: 28px; /* مساحة للآيكون */
-  }
-}
-/* خليه برضه الأبيض/أسود على الـselect نفسه (مش بس القائمة المنسدلة) */
+select.light-dropdown::-ms-value { color: #000; }
 select.light-dropdown {
   background: #fff !important;
   color: #000 !important;
   border-color: var(--input-border);
 }
-
-/* لون العنصر المختار والهوفر في القائمة */
 select.light-dropdown option:checked,
 select.light-dropdown option:hover {
   background: #eee !important;
   color: #000 !important;
 }
 
-/* للـ date: تأكيد شفافية خلفية الأيقونة في WebKit */
+/* ===== Date input (dark scheme) ===== */
+input[type="date"].date-dark { color-scheme: dark; }
 input[type="date"].date-dark::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.6);
+  opacity: .9;
+  cursor: pointer;
   background: transparent;
 }
+input[type="date"].date-dark::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+/* Firefox icon fallback */
+@-moz-document url-prefix() {
+  input[type="date"].date-dark {
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik03IDEwaDJ2Mkg3di0yem00IDBoMnYyaC0ydi0yem00IDBoMnYyaC0ydi0yek03IDE0aDJ2Mkg3di0yem00IDBoMnYyaC0ydi0yek0xOSA0aC0xVjJoLTJ2Mkg4VjJINnYyaC0xYy0xLjEgMC0yIC45LTIgMnYxMmMwIDEuMS45IDIgMiAyaDE0YzEuMSAwIDItLjkgMi0yVjZjMC0xLjEtLjktMi0yLTJ6bTAgMTZINVY5aDE0djExeiIvPjwvc3ZnPg==');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-inline-end: 28px;
+  }
+}
+
+/* ===== Header fg var ===== */
 :root { --header-fg: var(--text); }
 :root[data-theme="light"] { --header-fg: #fff; }
 
-/* نفس مظهر الفوكس على الاتنين */
+/* ===== Focus unify ===== */
 input[type="text"]:focus,
 textarea:focus {
   border-color: var(--input-focus) !important;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--input-focus) 25%, transparent) !important;
 }
 
-/* Placeholder موحد */
+/* Placeholder unify */
 input[type="text"]::placeholder,
 textarea::placeholder {
   color: var(--input-placeholder) !important;
   opacity: 1;
 }
 
-/* علشان أي ستايل متصفح ما يغيّرش الشكل */
+/* Reset browser appearance */
 input[type="text"],
 textarea {
   -webkit-appearance: none;
   appearance: none;
 }
+
 /* ===== Broadcast form: unify input/textarea/select only inside the form ===== */
 .broadcast-form input,
 .broadcast-form textarea,
 .broadcast-form select {
-  /* استخدم background بدل background-color لضمان كسر أي shorthand سابق */
   background: color-mix(in oklab, var(--card) 94%, transparent) !important;
   color: var(--input-text) !important;
   border: 1px solid var(--input-border) !important;
@@ -352,22 +324,17 @@ textarea {
   -webkit-appearance: none;
   appearance: none;
 }
-
-/* Placeholder موحّد */
 .broadcast-form input::placeholder,
 .broadcast-form textarea::placeholder {
   color: var(--input-placeholder) !important;
   opacity: 1 !important;
 }
-
-/* Focus ring موحّد */
 .broadcast-form input:focus,
 .broadcast-form textarea:focus,
 .broadcast-form select:focus {
   border-color: var(--input-focus) !important;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--input-focus) 25%, transparent) !important;
 }
-
 /* Chrome autofill fix */
 .broadcast-form input:-webkit-autofill,
 .broadcast-form input:-webkit-autofill:hover,
@@ -376,13 +343,111 @@ textarea {
   box-shadow: 0 0 0 1000px color-mix(in oklab, var(--card) 94%, transparent) inset !important;
   transition: background-color 9999s ease-in-out 0s !important;
 }
-
-/* لو فيه bg-white جاية من utility، اكسرها داخل الفورم */
+/* Break bg-white utilities inside form */
 .broadcast-form .bg-white {
   background: color-mix(in oklab, var(--card) 94%, transparent) !important;
   color: var(--input-text) !important;
 }
-/* اتجاه ثابت للحقول حسب اللغة */
+
+/* Direction helpers */
 .force-rtl { direction: rtl !important; text-align: right !important; }
 .force-ltr { direction: ltr !important; text-align: left !important; }
 
+/* ===== FiltersBar dropdowns (THE FIX) ===== */
+
+/* Light only (القائمة المنسدلة) */
+:root[data-theme="light"] .filtersBar select option {
+  background: #fff !important;
+  color: #000 !important;
+}
+
+/* Dark only (القائمة المنسدلة) */
+html[data-theme="dark"] .filtersBar select option {
+  background: #1b1d22 !important; /* نفس لون الكارت الداكن */
+  color: #fff !important;
+}
+
+/* تحديد/هوفر في الداكن */
+html[data-theme="dark"] .filtersBar select option:checked,
+html[data-theme="dark"] .filtersBar select option:hover {
+  background: rgba(245,166,35,.28) !important; /* ذهبي خفيف */
+  color: #fff !important;
+}
+
+/* العنصر نفسه في الداكن (القيمة المختارة لما القائمة تكون مقفولة) */
+html[data-theme="dark"] .filtersBar select {
+  background: transparent !important;
+  color: var(--text) !important;
+  border-color: var(--input-border) !important;
+  color-scheme: dark; /* يرسم عناصر التحكم داكن */
+}
+
+/* Disabled */
+.filtersBar select:disabled {
+  color: #888 !important;
+  opacity: 1;
+}
+/* ===== إخفاء أيقونة الكالندر من كل المتصفحات ===== */
+
+/* Chrome / Edge / Safari */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  -webkit-appearance: none;
+}
+
+/* Firefox */
+input[type="date"]::-moz-focus-inner {
+  border: 0;
+}
+input[type="date"]::-moz-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* Edge القديم و Internet Explorer */
+input[type="date"]::-ms-clear,
+input[type="date"]::-ms-expand {
+  display: none !important;
+}
+/* ===== إخفاء أيقونة التقويم الزرقاء من كل المتصفحات ===== */
+
+/* Chrome / Edge / Safari / Opera */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  -webkit-appearance: none;
+}
+
+/* Firefox */
+input[type="date"]::-moz-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* Edge القديم / Internet Explorer */
+input[type="date"]::-ms-clear,
+input[type="date"]::-ms-expand {
+  display: none !important;
+}
+
+/* تأكيد إزالة الخلفية الزرقاء اللي بتخبي النص */
+input[type="date"] {
+  background: transparent !important;
+  color: var(--text) !important;
+}
+/* اخفاء أيقونة التقويم الافتراضية فقط */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none !important;   /* Chrome/Edge/Safari */
+  -webkit-appearance: none;
+  opacity: 0;
+}
+
+/* فايرفوكس */
+input[type="date"]::-moz-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* تأكيد أن الخلفية شفافة والنص واضح */
+input[type="date"] {
+  background: transparent !important;
+  color: var(--text) !important;
+}

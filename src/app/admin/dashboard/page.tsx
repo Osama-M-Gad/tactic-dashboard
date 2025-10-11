@@ -104,8 +104,8 @@ const ORDER_BOTTOM = Object.freeze([
   "Total Items",
   "Total Available",
   "Not Available",
-  "Avg Visit Time",      // سنعرضه كـ "إجمالي وقت الزيارة"
-  "Total Travel Time",   // إجمالي وقت التنقل
+  "Avg Visit Time",
+  "Total Travel Time",
 ] as const);
 
 /* ========= Helper: Fetch all rows (for large tables with pagination) ========= */
@@ -157,6 +157,11 @@ function fmtHHMM(totalSeconds: number) {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
+/** تاريخ بتوقيت الرياض (YYYY-MM-DD) */
+function ksaDate(d = new Date()) {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+}
+
 /* ========= الصفحة ========= */
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -172,33 +177,31 @@ export default function AdminDashboardPage() {
   const [totalProducts, setTotalProducts] = useState<number>(0);
   const [totalAvailable, setTotalAvailable] = useState<number>(0);
   const [totalUnavailable, setTotalUnavailable] = useState<number>(0);
-// ── Visit cards (Totals) ─────────────────────────
-const [totalVisits, setTotalVisits] = useState(0);
-const [finishedVisits, setFinishedVisits] = useState(0);
-const [unfinishedVisits, setUnfinishedVisits] = useState(0);
-const [finishedPct, setFinishedPct] = useState(0);
-const [unfinishedPct, setUnfinishedPct] = useState(0);
+  // ── Visit cards (Totals) ─────────────────────────
+  const [totalVisits, setTotalVisits] = useState(0);
+  const [finishedVisits, setFinishedVisits] = useState(0);
+  const [unfinishedVisits, setUnfinishedVisits] = useState(0);
+  const [finishedPct, setFinishedPct] = useState(0);
+  const [unfinishedPct, setUnfinishedPct] = useState(0);
 
   // الاتجاه (اللغة بتتظبط من الهيدر العالمي)
-  const { isArabic } = useLangTheme();
+  const { isArabic: isAr } = useLangTheme();
 
   // التاريخ
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-// ضبّط نطاق افتراضي آخر 5 سنين بمجرد معرفة العميل
-useEffect(() => {
-  if (!clientId) return;
+  // ضبّط نطاق افتراضي آخر 5 سنين بمجرد معرفة العميل
+  useEffect(() => {
+    if (!clientId) return;
 
-  const today = new Date();
-  const to = today.toISOString().slice(0, 10);
+    const to = ksaDate();
+    const fromDate = new Date();
+    fromDate.setFullYear(fromDate.getFullYear() - 5);
+    const from = ksaDate(fromDate);
 
-  const fromDate = new Date(today);
-  fromDate.setFullYear(fromDate.getFullYear() - 5); // آخر 5 سنوات
-  const from = fromDate.toISOString().slice(0, 10);
-
-  setDateFrom((prev) => prev || from);
-  setDateTo((prev) => prev || to);
-}, [clientId]);
+    setDateFrom((prev) => prev || from);
+    setDateTo((prev) => prev || to);
+  }, [clientId]);
 
   // أسواق العميل
   const [allMarkets, setAllMarkets] = useState<MarketRow[]>([]);
@@ -209,7 +212,7 @@ useEffect(() => {
   // القيم المختارة
   const [selectedRegion, setSelectedRegion] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("");
- const [selectedMarketName, setSelectedMarketName] = useState<string>("");
+  const [selectedMarketName, setSelectedMarketName] = useState<string>("");
   const [selectedTeamLeader, setSelectedTeamLeader] = useState<string>(""); // user_id
 
   // Presence/Visit/Transit seconds
@@ -227,8 +230,7 @@ useEffect(() => {
     client_logo_filename?: string;
   } | null>(null);
 
-  // Loading indicators
-  const [loadingClient, setLoadingClient] = useState(false);
+  // Loading indicators (فقط للفلاتر)
   const [loadingFilters, setLoadingFilters] = useState(false);
 
   /* ========= جارِد: تحقق جلسة + مستخدم + دور ========= */
@@ -273,83 +275,85 @@ useEffect(() => {
   }, [router]);
 
   const welcomeName = useMemo(() => {
-    const fromView = isArabic ? headerInfo?.user_name_ar : headerInfo?.user_name_en;
+    const fromView = isAr ? headerInfo?.user_name_ar : headerInfo?.user_name_en;
     return fromView || user?.username || "";
-  }, [headerInfo, isArabic, user?.username]);
+  }, [headerInfo, isAr, user?.username]);
 
-  /* ========= جلب Availability (مثال قائم عندك) ========= */
+  /* ========= جلب Availability ========= */
   const fetchAvailabilityStats = useCallback(async () => {
-  if (!clientId) return;
-  // نطاق افتراضي: آخر 5 سنين لو المستخدم ما اختارش
-  const today = new Date().toISOString().slice(0, 10);
-  const fromDateObj = new Date();
-  fromDateObj.setFullYear(fromDateObj.getFullYear() - 5);
-  const fiveYearsAgo = fromDateObj.toISOString().slice(0, 10);
+    if (!clientId) return;
 
-  const from_date = dateFrom || fiveYearsAgo;
-  const to_date   = dateTo   || today;
+    const today = ksaDate();
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    const fiveYearsAgo = ksaDate(d);
 
-  const { data, error } = await supabase.rpc("get_availability_totals", {
-    p_client_id: clientId,
-    p_from_date: from_date,
-    p_to_date: to_date,
-    p_region: selectedRegion || null,
-    p_city: selectedCity || null,
-    p_store: (selectedMarketName || "").trim() || null, // فلترة بالسوق بالاسم
-    p_team_leader_id: selectedTeamLeader || null,       // Users.id لقائد الفريق
-  });
+    const from_date = dateFrom || fiveYearsAgo;
+    const to_date = dateTo || today;
 
-  if (error) {
-    console.error("[availability totals] RPC error:", error);
-    setTotalProducts(0);
-    setTotalAvailable(0);
-    setTotalUnavailable(0);
-    return;
-  }
+    const { data, error } = await supabase.rpc("get_availability_totals", {
+      p_client_id: clientId,
+      p_from_date: from_date,
+      p_to_date: to_date,
+      p_region: selectedRegion || null,
+      p_city: selectedCity || null,
+      p_store: (selectedMarketName || "").trim() || null,
+      p_team_leader_id: selectedTeamLeader || null,
+    });
 
-  const row = (data && data[0]) || { total_items: 0, total_available: 0, total_unavailable: 0 };
-  setTotalProducts(Number(row.total_items || 0));
-  setTotalAvailable(Number(row.total_available || 0));
-  setTotalUnavailable(Number(row.total_unavailable || 0));
-}, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
-// ── Visit cards RPC ──────────────────────────────
-const fetchVisitCards = useCallback(async () => {
-  if (!clientId) return;
+    if (error) {
+      console.error("[availability totals] RPC error:", error);
+      setTotalProducts(0);
+      setTotalAvailable(0);
+      setTotalUnavailable(0);
+      return;
+    }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const d = new Date(); d.setFullYear(d.getFullYear() - 5);
-  const fiveYearsAgo = d.toISOString().slice(0, 10);
+    const row = (data && data[0]) || { total_items: 0, total_available: 0, total_unavailable: 0 };
+    setTotalProducts(Number(row.total_items || 0));
+    setTotalAvailable(Number(row.total_available || 0));
+    setTotalUnavailable(Number(row.total_unavailable || 0));
+  }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
-  const from_date = dateFrom || fiveYearsAgo;
-  const to_date   = dateTo   || today;
+  // ── Visit cards RPC ──────────────────────────────
+  const fetchVisitCards = useCallback(async () => {
+    if (!clientId) return;
 
-  const { data, error } = await supabase.rpc("get_visit_cards_totals", {
-    p_client_id: clientId,
-    p_from_date: from_date,
-    p_to_date: to_date,
-    p_region: selectedRegion || null,
-    p_city: selectedCity || null,
-    p_store: (selectedMarketName || "").trim() || null,
-    p_team_leader_id: selectedTeamLeader || null,
-  });
+    const today = ksaDate();
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    const fiveYearsAgo = ksaDate(d);
 
-  if (error) {
-    console.error("[visit cards] RPC error:", error);
-    setTotalVisits(0);
-    setFinishedVisits(0);
-    setUnfinishedVisits(0);
-    setFinishedPct(0);
-    setUnfinishedPct(0);
-    return;
-  }
+    const from_date = dateFrom || fiveYearsAgo;
+    const to_date = dateTo || today;
 
-  const row = data?.[0] || {};
-  setTotalVisits(Number(row.total_visits || 0));
-  setFinishedVisits(Number(row.finished_visits || 0));
-  setUnfinishedVisits(Number(row.unfinished_visits || 0));
-  setFinishedPct(Number(row.finished_pct || 0));
-  setUnfinishedPct(Number(row.unfinished_pct || 0));
-}, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
+    const { data, error } = await supabase.rpc("get_visit_cards_totals", {
+      p_client_id: clientId,
+      p_from_date: from_date,
+      p_to_date: to_date,
+      p_region: selectedRegion || null,
+      p_city: selectedCity || null,
+      p_store: (selectedMarketName || "").trim() || null,
+      p_team_leader_id: selectedTeamLeader || null,
+    });
+
+    if (error) {
+      console.error("[visit cards] RPC error:", error);
+      setTotalVisits(0);
+      setFinishedVisits(0);
+      setUnfinishedVisits(0);
+      setFinishedPct(0);
+      setUnfinishedPct(0);
+      return;
+    }
+
+    const row = data?.[0] || {};
+    setTotalVisits(Number(row.total_visits || 0));
+    setFinishedVisits(Number(row.finished_visits || 0));
+    setUnfinishedVisits(Number(row.unfinished_visits || 0));
+    setFinishedPct(Number(row.finished_pct || 0));
+    setUnfinishedPct(Number(row.unfinished_pct || 0));
+  }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
   /* ========= جلب بيانات الهيدر والعميل من الـ View ========= */
   const resolveClientAndDetails = useCallback(async () => {
@@ -357,8 +361,7 @@ const fetchVisitCards = useCallback(async () => {
     const authUid = session?.session?.user?.id;
     if (!authUid) return;
 
-    setLoadingClient(true);
-
+    // هات صف البروفايل من الڤيو
     const { data, error } = await supabase
       .from("v_user_company_profile")
       .select("*")
@@ -386,37 +389,59 @@ const fetchVisitCards = useCallback(async () => {
         logo_url: data.client_logo_filename,
       });
     }
-   if (data?.client_id) {
-  await fetchAvailabilityStats();
-  await fetchVisitCards(); // ⬅️ إضافة
-}
- }, [fetchAvailabilityStats, fetchVisitCards]);
+    if (data?.client_id) {
+      await fetchAvailabilityStats();
+      await fetchVisitCards();
+    }
+  }, [fetchAvailabilityStats, fetchVisitCards]);
 
   const goChangePassword = useCallback(() => {
     router.push("/change-password");
   }, [router]);
-const goToDetailedReports = useCallback(() => {
-  const params = new URLSearchParams();
 
-  if (clientId)            params.set("clientId", clientId);
-  if (selectedRegion)      params.set("region", selectedRegion);
-  if (selectedCity)        params.set("city", selectedCity);
-  if (selectedMarketName)  params.set("market", selectedMarketName);
-  if (selectedTeamLeader)  params.set("tl", selectedTeamLeader);
-  if (dateFrom)            params.set("from", dateFrom);
-  if (dateTo)              params.set("to", dateTo);
+  const goToDetailedReports = useCallback(() => {
+    const params = new URLSearchParams();
 
-  router.push(`/admin/reports?${params.toString()}`);
-}, [
-  router,
-  clientId,
-  selectedRegion,
-  selectedCity,
-  selectedMarketName,
-  selectedTeamLeader,
-  dateFrom,
-  dateTo,
-]);
+    if (clientId) params.set("clientId", clientId);
+    if (selectedRegion) params.set("region", selectedRegion);
+    if (selectedCity) params.set("city", selectedCity);
+    if (selectedMarketName) params.set("market", selectedMarketName);
+    if (selectedTeamLeader) params.set("tl", selectedTeamLeader);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+
+    router.push(`/admin/reports?${params.toString()}`);
+  }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader, dateFrom, dateTo]);
+
+  const goToVisitRequests = useCallback(() => {
+    const params = new URLSearchParams();
+    if (clientId) params.set("clientId", clientId);
+    if (selectedRegion) params.set("region", selectedRegion);
+    if (selectedCity) params.set("city", selectedCity);
+    if (selectedMarketName) params.set("market", selectedMarketName);
+    if (selectedTeamLeader) params.set("tl", selectedTeamLeader);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+
+    router.push(`/admin/visit-requests?${params.toString()}`);
+  }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader, dateFrom, dateTo]);
+
+  const goToYesterdaysVisits = useCallback(() => {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yesterday = ksaDate(y);
+
+    const params = new URLSearchParams();
+    if (clientId) params.set("clientId", clientId);
+    if (selectedRegion) params.set("region", selectedRegion);
+    if (selectedCity) params.set("city", selectedCity);
+    if (selectedMarketName) params.set("market", selectedMarketName);
+    if (selectedTeamLeader) params.set("tl", selectedTeamLeader);
+    params.set("from", yesterday);
+    params.set("to", yesterday);
+
+    router.push(`/admin/yesterday-visits?${params.toString()}`);
+  }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
   /* ========= جلب Team Leaders المرتبطين بالعميل فقط ========= */
   const fetchClientTeamLeaders = useCallback(async () => {
@@ -429,9 +454,7 @@ const goToDetailedReports = useCallback(() => {
       .eq("client_id", clientId)
       .eq("is_active", true);
 
-    const userIds: string[] = (cuList || [])
-      .map((r: { user_id: string }) => r.user_id)
-      .filter(Boolean);
+    const userIds: string[] = (cuList || []).map((r: { user_id: string }) => r.user_id).filter(Boolean);
 
     if (userIds.length === 0) {
       setTeamLeaders([]);
@@ -445,9 +468,10 @@ const goToDetailedReports = useCallback(() => {
       .in("id", userIds)
       .in("role", ["Team Leader", "team_leader", "TEAM_LEADER", "Team_Leader"]);
 
-    const tls: TLUser[] = ((uData as UserRow[]) || [])
-      .map((u) => ({ id: String(u.id), username: String(u.username || "") }))
-      .filter((u) => !!u.username);
+    const tls: TLUser[] =
+      ((uData as UserRow[]) || [])
+        .map((u) => ({ id: String(u.id), username: String(u.username || "") }))
+        .filter((u) => !!u.username);
 
     setTeamLeaders(tls);
     setLoadingFilters(false);
@@ -462,11 +486,7 @@ const goToDetailedReports = useCallback(() => {
     setLoadingFilters(true);
 
     // 1) هات كل الزيارات بتاعت العميل (مقسّمة صفحات)
-    const allVisits = await fetchAllRows<{ market_id: string | null }>(
-      "Visits",
-      { client_id: clientId },
-      "market_id"
-    );
+    const allVisits = await fetchAllRows<{ market_id: string | null }>("Visits", { client_id: clientId }, "market_id");
 
     // 2) IDs بدون تكرار
     const ids = Array.from(new Set(allVisits.map((v) => v.market_id).filter((x): x is string => !!x)));
@@ -478,10 +498,7 @@ const goToDetailedReports = useCallback(() => {
     }
 
     // 3) تفاصيل الماركتس
-    const { data, error } = await supabase
-      .from("Markets")
-      .select("id, region, city, store")
-      .in("id", ids);
+    const { data, error } = await supabase.from("Markets").select("id, region, city, store").in("id", ids);
 
     if (error || !data) {
       console.error("Markets error", error);
@@ -494,7 +511,7 @@ const goToDetailedReports = useCallback(() => {
     setLoadingFilters(false);
   }, [clientId]);
 
-  /* ========= Presence/Visit/Transit من الـ VIEW الموحّد مع الفلاتر ========= */
+  /* ========= Presence/Visit/Transit من الـ VIEW الموحّد ========= */
   const fetchPresenceVisitTransit = useCallback(async () => {
     if (!clientId || !dateFrom || !dateTo) {
       setPresenceSeconds(0);
@@ -505,18 +522,17 @@ const goToDetailedReports = useCallback(() => {
 
     let q = supabase
       .from("v_presence_visit_unified")
-      .select(
-        "snapshot_date, presence_for_sum, visit_seconds, region, city, market_id, team_leader_id",
-        { count: "exact", head: false }
-      )
+      .select("snapshot_date, presence_for_sum, visit_seconds, region, city, market_id, team_leader_id", {
+        count: "exact",
+        head: false,
+      })
       .eq("client_id", clientId)
       .gte("snapshot_date", dateFrom)
       .lte("snapshot_date", dateTo);
 
     if (selectedRegion) q = q.eq("region", selectedRegion);
     if (selectedCity) q = q.eq("city", selectedCity);
-if (selectedMarketName) q = q.eq("store", selectedMarketName);
-
+    if (selectedMarketName) q = q.eq("store", selectedMarketName);
     if (selectedTeamLeader) q = q.eq("team_leader_id", selectedTeamLeader);
 
     const pageSize = 1000;
@@ -531,11 +547,7 @@ if (selectedMarketName) q = q.eq("store", selectedMarketName);
         console.error("presence/visit fetch error", error);
         break;
       }
-      const rows =
-        (data ?? []) as Array<{
-          presence_for_sum: number | null;
-          visit_seconds: number | null;
-        }>;
+      const rows = (data ?? []) as Array<{ presence_for_sum: number | null; visit_seconds: number | null }>;
 
       for (const r of rows) {
         if (typeof r.presence_for_sum === "number") pres += r.presence_for_sum;
@@ -551,7 +563,7 @@ if (selectedMarketName) q = q.eq("store", selectedMarketName);
     setPresenceSeconds(pres);
     setVisitSeconds(visit);
     setTransitSeconds(transit);
-}, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
+  }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
   /* ========= ربط الجلبات ========= */
   useEffect(() => {
@@ -559,12 +571,12 @@ if (selectedMarketName) q = q.eq("store", selectedMarketName);
   }, [resolveClientAndDetails]);
 
   useEffect(() => {
-  if (!clientId) return;
-  fetchClientMarkets();
-  fetchClientTeamLeaders();
-  fetchAvailabilityStats();
-  fetchVisitCards(); // ⬅️ إضافة
-}, [clientId, fetchClientMarkets, fetchClientTeamLeaders, fetchAvailabilityStats, fetchVisitCards]);
+    if (!clientId) return;
+    fetchClientMarkets();
+    fetchClientTeamLeaders();
+    fetchAvailabilityStats();
+    fetchVisitCards();
+  }, [clientId, fetchClientMarkets, fetchClientTeamLeaders, fetchAvailabilityStats, fetchVisitCards]);
 
   useEffect(() => {
     fetchPresenceVisitTransit();
@@ -572,40 +584,37 @@ if (selectedMarketName) q = q.eq("store", selectedMarketName);
 
   /* ========= إعادة الجلب عند التركيز ========= */
   useRefreshOnFocus(() => {
-  resolveClientAndDetails();
-  if (clientId) {
-    fetchClientMarkets();
-    fetchClientTeamLeaders();
-    fetchPresenceVisitTransit();
-    fetchVisitCards(); // ⬅️ إضافة
-  }
-});
+    resolveClientAndDetails();
+    if (clientId) {
+      fetchClientMarkets();
+      fetchClientTeamLeaders();
+      fetchPresenceVisitTransit();
+      fetchVisitCards();
+    }
+  });
 
   /* ========= Handlers ========= */
- const onFromChange = (v: string) => {
-  if (dateTo && v && new Date(v) > new Date(dateTo)) {
-    setDateTo(v);
-  }
-  setDateFrom(v);
-};
-
-const onToChange = (v: string) => {
-  if (dateFrom && v && new Date(v) < new Date(dateFrom)) {
+  const onFromChange = (v: string) => {
+    if (dateTo && v && new Date(v) > new Date(dateTo)) {
+      setDateTo(v);
+    }
     setDateFrom(v);
-  }
-  setDateTo(v);
-};
+  };
+
+  const onToChange = (v: string) => {
+    if (dateFrom && v && new Date(v) < new Date(dateFrom)) {
+      setDateFrom(v);
+    }
+    setDateTo(v);
+  };
 
   /* ========= Derivations ========= */
-  const { isArabic: isAr } = useLangTheme();
-
   const clientDisplayName = useMemo(() => {
     const fallback = isAr ? "اسم الشركة" : "Company Name";
     if (!headerInfo) return client?.name || client?.name_ar || fallback;
 
-    const fromView = isAr
-      ? headerInfo.client_name_ar || headerInfo.client_name_en
-      : headerInfo.client_name_en || headerInfo.client_name_ar;
+    const fromView =
+      isAr ? headerInfo.client_name_ar || headerInfo.client_name_en : headerInfo.client_name_en || headerInfo.client_name_ar;
     return fromView || client?.name || client?.name_ar || fallback;
   }, [headerInfo, client, isAr]);
 
@@ -642,55 +651,58 @@ const onToChange = (v: string) => {
   }, [filteredByRegion]);
 
   // أسواق مع id لعرضها في الـ select
- const marketOptions = useMemo(() => {
-  // خُد الماركتس بعد فلترة المنطقة/المدينة
-  const list = filteredByCity
-    .filter((m): m is Required<Pick<MarketRow, "store">> & MarketRow => !!m.store)
-    .map((m) => m.store!.trim());
+  const marketOptions = useMemo(() => {
+    const list = filteredByCity
+      .filter((m): m is Required<Pick<MarketRow, "store">> & MarketRow => !!m.store)
+      .map((m) => m.store!.trim());
 
-  // إزالة التكرار حسب اسم المتجر فقط (Othaim يظهر مرة)
-  const uniq = Array.from(new Set(list));
-  return uniq.sort((a, b) => a.localeCompare(b, "ar"));
-}, [filteredByCity]);
+    const uniq = Array.from(new Set(list));
+    return uniq.sort((a, b) => a.localeCompare(b, "ar"));
+  }, [filteredByCity]);
 
   /* ========= Data for stats ========= */
-const orderedStats = useMemo(() => {
-  // دوائر الوقت
-  const presence = presenceSeconds;
-  const visit = visitSeconds;
-  const transit = transitSeconds;
-  const visitPctTime   = presence ? (visit   / presence) * 100 : 0;
-  const transitPctTime = presence ? (transit / presence) * 100 : 0;
+  const orderedStats = useMemo(() => {
+    // دوائر الوقت
+    const presence = presenceSeconds;
+    const visit = visitSeconds;
+    const transit = transitSeconds;
+    const visitPctTime = presence ? (visit / presence) * 100 : 0;
+    const transitPctTime = presence ? (transit / presence) * 100 : 0;
 
-  const base: Record<string, { value: number | string; percentage: number }> = {
-    // 🔵 بطاقات الزيارات (من RPC)
-    "Total Visits":      { value: totalVisits,      percentage: 100 },
-    "Completed Visits":  { value: finishedVisits,   percentage: finishedPct },
-    "False Visits":      { value: unfinishedVisits, percentage: unfinishedPct },
-    "Completed %":       { value: finishedPct,      percentage: finishedPct },
-    "False %":           { value: unfinishedPct,    percentage: unfinishedPct },
+    const base: Record<string, { value: number | string; percentage: number }> = {
+      // 🔵 بطاقات الزيارات (من RPC)
+      "Total Visits": { value: totalVisits, percentage: 100 },
+      "Completed Visits": { value: finishedVisits, percentage: finishedPct },
+      "False Visits": { value: unfinishedVisits, percentage: unfinishedPct },
+      "Completed %": { value: finishedPct, percentage: finishedPct },
+      "False %": { value: unfinishedPct, percentage: unfinishedPct },
 
-    // 🟢 بطاقات الإتاحة
-    "Total Items":       { value: totalProducts,   percentage: 100 },
-    "Total Available":   { value: totalAvailable,  percentage: totalProducts ? (totalAvailable / totalProducts) * 100 : 0 },
-    "Not Available":     { value: totalUnavailable,percentage: totalProducts ? (totalUnavailable / totalProducts) * 100 : 0 },
+      // 🟢 بطاقات الإتاحة
+      "Total Items": { value: totalProducts, percentage: 100 },
+      "Total Available": { value: totalAvailable, percentage: totalProducts ? (totalAvailable / totalProducts) * 100 : 0 },
+      "Not Available": { value: totalUnavailable, percentage: totalProducts ? (totalUnavailable / totalProducts) * 100 : 0 },
 
-    // 🟠 دوائر الوقت
-    "Avg Visit Time":    { value: fmtHHMM(visit),   percentage: visitPctTime },
-    "Total Travel Time": { value: fmtHHMM(transit), percentage: transitPctTime },
-  };
+      // 🟠 دوائر الوقت
+      "Avg Visit Time": { value: fmtHHMM(visit), percentage: visitPctTime },
+      "Total Travel Time": { value: fmtHHMM(transit), percentage: transitPctTime },
+    };
 
-  const top = ORDER_TOP.map((label) => ({ label, ...base[label] }));
-  const bottom = ORDER_BOTTOM.map((label) => ({ label, ...base[label] }));
-  return [...top, ...bottom];
-}, [
-  // زيارات
-  totalVisits, finishedVisits, unfinishedVisits, finishedPct, unfinishedPct,
-  // إتاحة
-  totalProducts, totalAvailable, totalUnavailable,
-  // وقت
-  presenceSeconds, visitSeconds, transitSeconds
-]);
+    const top = ORDER_TOP.map((label) => ({ label, ...base[label] }));
+    const bottom = ORDER_BOTTOM.map((label) => ({ label, ...base[label] }));
+    return [...top, ...bottom];
+  }, [
+    totalVisits,
+    finishedVisits,
+    unfinishedVisits,
+    finishedPct,
+    unfinishedPct,
+    totalProducts,
+    totalAvailable,
+    totalUnavailable,
+    presenceSeconds,
+    visitSeconds,
+    transitSeconds,
+  ]);
 
   /* ========= UI ========= */
   if (booting) {
@@ -767,9 +779,6 @@ const orderedStats = useMemo(() => {
               <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {isAr ? "مرحبًا" : "Welcome"} {welcomeName}
               </div>
-              {loadingClient && (
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{isAr ? "جاري التحميل…" : "Loading…"}</div>
-              )}
             </div>
           </div>
 
@@ -819,7 +828,7 @@ const orderedStats = useMemo(() => {
                 onChange={(e) => {
                   setSelectedRegion(e.target.value);
                   setSelectedCity("");
-                 setSelectedMarketName("");
+                  setSelectedMarketName("");
                 }}
                 style={capsuleSelect}
                 disabled={loadingFilters}
@@ -852,19 +861,21 @@ const orderedStats = useMemo(() => {
               </select>
             </CapsuleItem>
 
-           <CapsuleItem label={isArabic ? "السوق" : "Market"}>
-  <select
-    value={selectedMarketName}
-    onChange={(e) => setSelectedMarketName(e.target.value)}
-    style={capsuleSelect}
-    disabled={loadingFilters || marketOptions.length === 0}
-  >
-    <option value="">{isArabic ? "الكل" : "All"}</option>
-    {marketOptions.map((name) => (
-      <option key={name} value={name}>{name}</option>
-    ))}
-  </select>
-</CapsuleItem>
+            <CapsuleItem label={isAr ? "السوق" : "Market"}>
+              <select
+                value={selectedMarketName}
+                onChange={(e) => setSelectedMarketName(e.target.value)}
+                style={capsuleSelect}
+                disabled={loadingFilters || marketOptions.length === 0}
+              >
+                <option value="">{isAr ? "الكل" : "All"}</option>
+                {marketOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </CapsuleItem>
 
             <CapsuleItem label={isAr ? "قائد الفريق" : "Team Leader"}>
               <select
@@ -886,7 +897,7 @@ const orderedStats = useMemo(() => {
               <input
                 type="date"
                 value={dateFrom}
-               onChange={(e) => onFromChange(e.target.value)}
+                onChange={(e) => onFromChange(e.target.value)}
                 onFocus={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 style={capsuleInput}
               />
@@ -923,13 +934,19 @@ const orderedStats = useMemo(() => {
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 32 }}>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 32, flexWrap: "wrap" }}>
         <button style={primaryBtnStyle} onClick={() => router.push("/admin/notifications")}>
-          {isAr ? "إرسال الإشعارات" : "Send Notifications"}
+          {isAr ? "الإشعارات" : "Notifications"}
         </button>
-       <button style={primaryBtnStyle} onClick={goToDetailedReports}>
-  {isAr ? "التقارير المفصلة" : "Detailed Reports"}
-</button>
+        <button style={primaryBtnStyle} onClick={goToDetailedReports}>
+          {isAr ? "تقارير الزياره" : "Visit Report"}
+        </button>
+        <button style={primaryBtnStyle} onClick={goToVisitRequests}>
+          {isAr ? "طلبات الزياره" : "Visit Requests"}
+        </button>
+        <button style={primaryBtnStyle} onClick={goToYesterdaysVisits}>
+          {isAr ? "زيارات أمس" : "Yesterday’s Visits"}
+        </button>
       </div>
 
       {/* --- Logo Modal --- */}
@@ -938,13 +955,7 @@ const orderedStats = useMemo(() => {
           <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>{clientDisplayName}</h3>
             {clientLogoUrl && (
-              <Image
-                src={clientLogoUrl}
-                alt="Client Logo Large"
-                width={250}
-                height={250}
-                style={{ objectFit: "contain", margin: "20px 0" }}
-              />
+              <Image src={clientLogoUrl} alt="Client Logo Large" width={250} height={250} style={{ objectFit: "contain", margin: "20px 0" }} />
             )}
             <button onClick={() => setLogoModalOpen(false)} style={primaryBtnStyle}>
               {isAr ? "إغلاق" : "Close"}
@@ -1090,7 +1101,6 @@ function StatCard({
     "Total Items": isArabic ? "إجمالي الأصناف" : "Total Items",
   };
 
-  // أي بطاقة اسمها يحتوي على % نعرض فيها علامة %
   const isPercentCard = stat.label.includes("%");
 
   return (
@@ -1137,7 +1147,6 @@ function StatCard({
     </div>
   );
 }
-
 
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
