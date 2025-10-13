@@ -4,42 +4,39 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { logout } from "@/utils/session";
 import { useLangTheme } from "@/hooks/useLangTheme";
+import type { FC } from "react";
 
-type Props = {
+export type AppHeaderProps = {
   onToggleLang: () => void;
   showLogout?: boolean;
   className?: string;
 };
 
-export default function AppHeader({
+const AppHeader: FC<AppHeaderProps> = ({
   onToggleLang,
   showLogout = true,
   className,
-}: Props) {
-  // المصدر الوحيد للحقيقة
+}) => {
   const { isArabic: liveArabic } = useLangTheme();
-  const langIsArabic = liveArabic; // ← دايمًا من الهوك
+  const langIsArabic = liveArabic;
 
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [logoFailed, setLogoFailed] = useState(false);
 
-  // ثبّت dir من localStorage أول ما الهيدر يركب (يحل مشكلة ما بعد اللوجين)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const el = document.documentElement;
-    const ls = localStorage.getItem("lang"); // "ar" | "en" | null
+    const ls = localStorage.getItem("lang");
     const shouldAr = ls === "ar" || el.getAttribute("dir") === "rtl";
     const wantDir = shouldAr ? "rtl" : "ltr";
     if (el.getAttribute("dir") !== wantDir) el.setAttribute("dir", wantDir);
   }, []);
 
-  // ثيم — الافتراضي دايمًا DARK (نتجاهل تفضيل النظام)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
     const initial: "dark" | "light" = saved ?? "dark";
     setTheme(initial);
-    // نثبت الـ data-theme فورًا عند mount لتفادي أي flicker
     document.documentElement.setAttribute("data-theme", initial);
   }, []);
 
@@ -51,7 +48,6 @@ export default function AppHeader({
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
-  // Toggle قوي: يحدّث dir + localStorage ثم ينادي منطقك
   const handleToggleLang = () => {
     if (typeof document !== "undefined") {
       const el = document.documentElement;
@@ -174,4 +170,6 @@ export default function AppHeader({
       </div>
     </div>
   );
-}
+};
+
+export default AppHeader;

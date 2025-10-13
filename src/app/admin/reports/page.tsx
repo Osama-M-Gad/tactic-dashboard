@@ -152,7 +152,6 @@ function Capsule({ label, summary, children }: { label: string; summary?: string
   );
 }
 
-/* بسيط: dropdown multi-select */
 function MultiDropdown({
   options,
   values,
@@ -349,11 +348,9 @@ export default function Page() {
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [selectedSnapshotIds, setSelectedSnapshotIds] = useState<UUID[]>([]);
 
-  // الخطوة الافتراضية + الاختيار
   const FIRST_STEP: StepKey = useMemo(() => Object.keys(VISIT_STEPS)[0] as StepKey, []);
   const [currentStep, setCurrentStep] = useState<StepKey>(FIRST_STEP);
 
-  // الزيارة المختارة
   const activeVisitId = useMemo(() => {
     if (selectedSnapshotIds.length === 0) return null;
     const sid = selectedSnapshotIds[0];
@@ -361,7 +358,6 @@ export default function Page() {
     return s ? (s.original_visit_id || s.tl_visit_id || null) : null;
   }, [selectedSnapshotIds, snapshots]);
 
-  // إظهار فقط خطوات الزيارة اللي فيها بيانات
   const [availableSteps, setAvailableSteps] = useState<StepKey[]>([]);
   useEffect(() => {
     if (!activeVisitId) {
@@ -391,7 +387,6 @@ export default function Page() {
     };
   }, [activeVisitId, FIRST_STEP]);
 
-  // رجّع لأول خطوة لما التاريخ يتغير
   useEffect(() => {
     setCurrentStep(FIRST_STEP);
   }, [FIRST_STEP, selectedSnapshotIds]);
@@ -702,6 +697,7 @@ export default function Page() {
   const t = useMemo(
     () => ({
       back: ar ? "رجوع" : "Back",
+      inventoryReports: ar ? "تقارير الجرد" : "Inventory Reports",
       tls: ar ? "قادة الفريق" : "Team Leaders",
       users: ar ? "المستخدمون" : "Users",
       chains: ar ? "الأسواق" : "Chains",
@@ -989,10 +985,10 @@ export default function Page() {
             )}
           </Panel>
 
-          {/* Back */}
-          <div style={{ display: "flex", justifyContent: ar ? "flex-end" : "flex-start" }}>
+          {/* Buttons */}
+          <div style={{ display: "flex", justifyContent: ar ? "flex-end" : "flex-start", gap: 12, gridColumn: "1 / -1" }}>
             <Link
-              href="/admin/dashboard"
+              href="/admin/inventory"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1001,13 +997,30 @@ export default function Page() {
                 borderRadius: 12,
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
-                color: "#222",
+                color: "var(--accent-foreground)",
                 textDecoration: "none",
                 fontWeight: 800,
-                direction: ar ? "rtl" : "ltr",
               }}
             >
-              {ar ? "→" : "←"} {t.back}
+              {t.inventoryReports}
+            </Link>
+
+            <Link
+              href="/admin/dashboard"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 18px",
+                borderRadius: 12,
+                border: "1px solid var(--divider)",
+                background: "var(--card)",
+                color: "var(--text)",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              {t.back}
             </Link>
           </div>
         </div>

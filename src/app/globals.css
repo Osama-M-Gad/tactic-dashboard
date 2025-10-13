@@ -451,3 +451,8 @@ input[type="date"] {
   background: transparent !important;
   color: var(--text) !important;
 }
+/* Fix for dropdown option colors */
+option {
+  background-color: white;
+  color: black;
+}

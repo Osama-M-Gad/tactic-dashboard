@@ -1,27 +1,72 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
-import AppHeader from "@/components/AppHeader";
+import { useLangTheme } from "@/hooks/useLangTheme";
+
+/* ========= Types ========= */
+type UUID = string;
 
 type PortalUser = {
-  id: string;
+  id: UUID;
   role: string;
   username?: string;
   name?: string | null;
   arabic_name?: string | null;
 };
 
+type ClientLite = { id: UUID; name: string | null; name_ar: string | null };
+type UserLite   = { id: UUID; name: string | null; arabic_name: string | null };
+
+type SendReportResponse = { ok?: boolean; sent?: number; error?: string };
+
+/* ========= Helpers (normalize + dedupe + sort) ========= */
+const norm = (s: unknown) => String(s ?? "").trim();
+const uniqSorted = (arr: unknown[]) =>
+  Array.from(new Set(arr.map(norm)))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ar"));
+
+
+/* ========= Page ========= */
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
-  const [isArabic, setIsArabic] = useState(
-    (typeof window !== "undefined" && localStorage.getItem("lang") === "en") ? false : true
-  );
+  const { isArabic } = useLangTheme();
+
   const [user, setUser] = useState<PortalUser | null>(null);
   const [profile, setProfile] = useState<Pick<PortalUser, "name" | "arabic_name"> | null>(null);
 
-  // ✅ Gate
+  const [isSending, setIsSending] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  // Popup state
+  const [sendOpen, setSendOpen] = useState(false);
+
+  // Dropdown data
+  const [clients, setClients] = useState<ClientLite[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+
+  const [clientUsers, setClientUsers] = useState<UserLite[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+
+  // Extra filters (region / city / store / status)
+  const [region, setRegion] = useState<string>("");
+  const [city, setCity] = useState<string>("");
+  const [store, setStore] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+
+  // Recipients (multi-select)
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+
+  // Options for dropdowns
+  const [regionsOpts, setRegionsOpts] = useState<string[]>([]);
+  const [citiesOpts, setCitiesOpts] = useState<string[]>([]);
+  const [storesOpts, setStoresOpts] = useState<string[]>([]);
+  const [recipientsOpts, setRecipientsOpts] = useState<string[]>([]);
+
+  /* ===== Gate ===== */
   useEffect(() => {
     const raw =
       (typeof window !== "undefined" && localStorage.getItem("currentUser")) ||
@@ -43,7 +88,7 @@ export default function SuperAdminDashboardPage() {
     setUser(u);
   }, [router]);
 
-  // 🔎 جلب الاسم العربي/الإنجليزي
+  /* ===== User name ===== */
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.id) return;
@@ -58,12 +103,207 @@ export default function SuperAdminDashboardPage() {
     if (user) fetchProfile();
   }, [user]);
 
+  /* ===== Theme ===== */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+    const initial: "dark" | "light" = saved ?? "dark";
+    setTheme(initial);
+    document.documentElement.setAttribute("data-theme", initial);
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
   const displayName = useMemo(() => {
     if (!profile) return "";
     return isArabic ? (profile.arabic_name || profile.name || "") : (profile.name || profile.arabic_name || "");
   }, [profile, isArabic]);
 
-  // 🌐 نصوص AR/EN
+  /* ===== Load clients on open ===== */
+  useEffect(() => {
+    if (!sendOpen) return;
+
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("client")
+          .select("id, name, name_ar")
+          .order("name", { ascending: true })
+          .throwOnError();
+
+        setClients((data as ClientLite[]) ?? []);
+      } catch (err) {
+        console.error("clients fetch error:", err);
+        const { data: fallback } = await supabase
+          .from("client")
+          .select("id, name, name_ar")
+          .order("id", { ascending: false })
+          .limit(500);
+        setClients((fallback as ClientLite[]) ?? []);
+      }
+    })();
+  }, [sendOpen]);
+
+  /* === Load dropdown options (regions/cities/stores/recipients) === */
+  useEffect(() => {
+    if (!sendOpen) return;
+
+    // helper: apply client filter if chosen
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byClient = (q: any) => (selectedClientId ? q.eq("client_id", selectedClientId) : q);
+
+    (async () => {
+      // Regions
+      const { data: reg } = await byClient(
+        supabase
+          .from("visits_details_v")
+          .select("market_region", { distinct: true })
+          .not("market_region", "is", null)
+          .order("market_region", { ascending: true })
+      );
+      setRegionsOpts(uniqSorted((reg ?? []).map((r: { market_region: string }) => r.market_region)));
+
+      // Cities (dependent on region if chosen)
+      let citiesQ = byClient(
+        supabase
+          .from("visits_details_v")
+          .select("market_city, market_region", { distinct: true })
+          .not("market_city", "is", null)
+      );
+      if (region) citiesQ = citiesQ.eq("market_region", region);
+      const { data: cit } = await citiesQ.order("market_city", { ascending: true });
+      setCitiesOpts(uniqSorted((cit ?? []).map((r: { market_city: string }) => r.market_city)));
+
+      // Stores (dependent on region/city if chosen)
+      let storesQ = byClient(
+        supabase
+          .from("visits_details_v")
+          .select("market_store, market_region, market_city", { distinct: true })
+          .not("market_store", "is", null)
+      );
+      if (region) storesQ = storesQ.eq("market_region", region);
+      if (city)   storesQ = storesQ.eq("market_city",   city);
+      const { data: sto } = await storesQ.order("market_store", { ascending: true });
+      setStoresOpts(uniqSorted((sto ?? []).map((r: { market_store: string }) => r.market_store)));
+
+      // Recipients from scheduled_email_reports (filtered by client if selected)
+      const { data: rec } = await (selectedClientId
+        ? supabase
+            .from("scheduled_email_reports")
+            .select("recipient_email", { distinct: true })
+            .eq("is_active", true)
+            .eq("client_id", selectedClientId)
+            .order("recipient_email", { ascending: true })
+        : supabase
+            .from("scheduled_email_reports")
+            .select("recipient_email", { distinct: true })
+            .eq("is_active", true)
+            .order("recipient_email", { ascending: true })
+      );
+      setRecipientsOpts(uniqSorted((rec ?? []).map((r: { recipient_email: string }) => r.recipient_email)));
+    })();
+  }, [sendOpen, selectedClientId, region, city]);
+
+  /* ===== Load users of selected client ===== */
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientUsers([]);
+      setSelectedUserId("");
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data: links } = await supabase
+          .from("client_users")
+          .select("user_id")
+          .eq("client_id", selectedClientId)
+          .throwOnError();
+
+        const ids = Array.from(new Set(((links ?? []) as { user_id: UUID }[]).map((r) => r.user_id)));
+        if (ids.length === 0) {
+          setClientUsers([]);
+          setSelectedUserId("");
+          return;
+        }
+
+        const { data: users } = await supabase
+          .from("Users")
+          .select("id, name, arabic_name")
+          .in("id", ids)
+          .order("name", { ascending: true })
+          .throwOnError();
+
+        setClientUsers((users as UserLite[]) ?? []);
+      } catch (err) {
+        console.error("client users fetch error:", err);
+        setClientUsers([]);
+        setSelectedUserId("");
+      }
+    })();
+  }, [selectedClientId]);
+
+  /* ===== Send handler ===== */
+  const handleSendDailyReport = async () => {
+    if (isSending) return;
+    setIsSending(true);
+
+    try {
+      const {
+        data: { session },
+        error: sessErr,
+      } = await supabase.auth.getSession();
+      if (sessErr) throw sessErr;
+      if (!session) {
+        alert(isArabic ? "من فضلك سجّل الدخول أولاً." : "Please login first.");
+        router.push("/login");
+        return;
+      }
+
+      // Body
+      const body: Record<string, unknown> = {};
+      if (selectedClientId) body.client_id = selectedClientId;
+      if (selectedClientId && selectedUserId) body.user_id = selectedUserId;
+
+      // فلاتر إضافية
+      if (region.trim()) body.region = region.trim();
+      if (city.trim())   body.city   = city.trim();
+      if (store.trim())  body.store  = store.trim();
+      if (status.trim()) body.status = status.trim().toLowerCase();
+
+      // تحديد المستلمين (اختياري) من الـ multi-select
+      if (selectedRecipients.length > 0) body.recipient_emails = selectedRecipients;
+
+console.log("send-daily-report body >>>", body);
+      
+const { data, error } = await supabase.functions.invoke<SendReportResponse>("send-daily-report", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body,
+      });
+      if (error) throw error;
+
+      const sent = data?.sent ?? 0;
+      alert(isArabic ? `تم الإرسال ✅ (عدد: ${sent})` : `Sent ✅ (count: ${sent})`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert((isArabic ? "فشل الإرسال: " : "Failed: ") + msg);
+    } finally {
+      setSelectedClientId("");
+      setSelectedUserId("");
+      setRegion("");
+      setCity("");
+      setStore("");
+      setStatus("");
+      setSelectedRecipients([]);
+      setIsSending(false);
+      setSendOpen(false);
+    }
+  };
+
+  /* ===== UI Texts ===== */
   const T = useMemo(() => {
     return isArabic
       ? {
@@ -72,6 +312,8 @@ export default function SuperAdminDashboardPage() {
           buttons: [
             "تقارير كل العملاء",
             "إضافة عميل جديد",
+            "إدارة التقارير البريدية",
+            "ارسال زيارات أمس",
             "إضافة مستخدم لعميل محدد",
             "إضافة منتجات لعميل محدد",
             "إضافة خواص/مميزات للعميل",
@@ -80,7 +322,7 @@ export default function SuperAdminDashboardPage() {
             "تحضير التقارير",
             "إيقاف عميل",
             "إضافة مديرين للعميل",
-            "إدخال أسواق (بصفة عامة)", 
+            "إدخال أسواق (بصفة عامة)",
             "إدخال فئات (بصفة عامة)",
           ],
         }
@@ -90,6 +332,8 @@ export default function SuperAdminDashboardPage() {
           buttons: [
             "ALL CLIENTS REPORTS",
             "ADD NEW CLIENT",
+            "Manage Email Reports",
+            "Yestrday visit Email",
             "ADD NEW USER FOR CHOSEN CLIENT",
             "ADD PRODUCTS FOR CHOSEN CLIENT",
             "ADD FEATURES FOR CLIENT",
@@ -98,17 +342,16 @@ export default function SuperAdminDashboardPage() {
             "PREPARE REPORTING",
             "CLIENT STOP",
             "ADD ADMINS FOR CLIENT",
-             "ADD MARKETS (GENERAL)",
-             "ADD CATEGORIES (GENERAL)",
+            "ADD MARKETS (GENERAL)",
+            "ADD CATEGORIES (GENERAL)",
           ],
         };
   }, [isArabic]);
 
   if (!user) {
-    return <div style={{ color: "#fff", padding: 24 }}>Loading…</div>;
+    return <div style={{ color: "var(--text)", padding: 24 }}>Loading…</div>;
   }
 
-  // 🎨 ستايل موحّد للأزرار
   const buttonStyle: React.CSSProperties = {
     backgroundColor: "#555",
     color: "#ddd",
@@ -120,22 +363,39 @@ export default function SuperAdminDashboardPage() {
     minWidth: 280,
     cursor: "pointer",
     boxShadow: "0 0 0 2px #2b2b2b inset",
+    transition: "background-color 0.2s",
   };
 
+  /* ========= Render ========= */
   return (
-    <div style={{ background: "#000", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
-      <AppHeader
-        onToggleLang={() => setIsArabic((s) => !s)}
-        showLogout={true}
-      />
-
-      <div style={{ textAlign: "center", marginTop: 24 }}>
-        <h2 style={{ fontWeight: 600 }}>
+    <div style={{ background: "var(--bg)", minHeight: "100vh", color: "var(--text)", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          padding: "10px 20px",
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          borderBottom: "1px solid var(--divider)",
+          position: "relative",
+          minHeight: 52,
+        }}
+      >
+        <h2
+          style={{
+            fontWeight: 600,
+            margin: 0,
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            whiteSpace: "nowrap",
+          }}
+        >
           {T.welcome} ({displayName || (isArabic ? "اسم المستخدم" : "User Name")})
         </h2>
+        <div style={{ display: "flex", gap: 10 }}>{/* header actions */}</div>
       </div>
 
-      {/* شبكة الأزرار */}
       <div
         style={{
           maxWidth: 980,
@@ -148,25 +408,288 @@ export default function SuperAdminDashboardPage() {
           flexGrow: 1,
         }}
       >
-        {T.buttons.map((label) => (
-          <button
-            key={label}
-            style={{ ...buttonStyle, width: "100%", height: 70 }}
-            onClick={() => {
-  if (label === "ADD NEW CLIENT" || label === "إضافة عميل جديد") {
-    router.push("/super-admin/clients/new");
-  } else {
-    // لاحقًا هنربط باقي الأزرار
-  }
-}}
-          >
-            {label}
-          </button>
-        ))}
+        {T.buttons.map((label) => {
+          const isSendButton = label === "ارسال زيارات أمس" || label === "Yestrday visit Email";
+          return (
+            <button
+              key={label}
+              style={{ ...buttonStyle, width: "100%", height: 70, opacity: isSendButton && isSending ? 0.6 : 1 }}
+              disabled={isSendButton && isSending}
+              onClick={() => {
+                if (label === "ADD NEW CLIENT" || label === "إضافة عميل جديد") {
+                  router.push("/super-admin/clients/new");
+                } else if (label === "Manage Email Reports" || label === "إدارة التقارير البريدية") {
+                  router.push("/super-admin/email-reports");
+                } else if (isSendButton) {
+                  setSendOpen(true); // افتح الـPopup
+                }
+              }}
+            >
+              {isSendButton && isSending ? (isArabic ? "جاري الإرسال..." : "Sending...") : label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* فوتر مثبت أسفل */}
-      <div style={{ textAlign: "center", color: "#bbb", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
+      {/* Popup */}
+      {sendOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              width: 520,
+              maxWidth: "95%",
+              background: "var(--card)",
+              border: "1px solid var(--divider)",
+              borderRadius: 10,
+              padding: 20,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 14, textAlign: "center" }}>
+              {isArabic ? "إرسال التقارير" : "Send Reports"}
+            </h3>
+
+            {/* Client */}
+            <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "اختر العميل (اختياري)" : "Select client (optional)"}
+              </label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => {
+                  setSelectedClientId(e.target.value);
+                  // reset dependent selections
+                  setSelectedUserId("");
+                  setRegion("");
+                  setCity("");
+                  setStore("");
+                  setSelectedRecipients([]);
+                }}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All clients"}</option>
+                {clients.map((c, idx) => (
+                  <option key={`${c.id}-${idx}`} value={c.id}>
+                    {isArabic ? c.name_ar || c.name || c.id : c.name || c.name_ar || c.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Users */}
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "اختر مستخدم من العميل (اختياري)" : "Select a user of the client (optional)"}
+              </label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                disabled={!selectedClientId}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                  opacity: selectedClientId ? 1 : 0.6,
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All users"}</option>
+                {clientUsers.map((u, idx) => (
+                  <option key={`${u.id}-${idx}`} value={u.id}>
+                    {isArabic ? u.arabic_name || u.name || u.id : u.name || u.arabic_name || u.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "المنطقة (اختياري)" : "Region (optional)"}
+              </label>
+              <select
+                value={region}
+                onChange={(e) => {
+                  setRegion(e.target.value);
+                  setCity("");
+                  setStore("");
+                }}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                {regionsOpts.map((r, idx) => (
+                  <option key={`${r}-${idx}`} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "المدينة (اختياري)" : "City (optional)"}
+              </label>
+              <select
+                value={city}
+                onChange={(e) => { setCity(e.target.value); setStore(""); }}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                {citiesOpts.map((c, idx) => (
+                  <option key={`${c}-${idx}`} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "السوق/المتجر (اختياري)" : "Store/Market (optional)"}
+              </label>
+              <select
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                {storesOpts.map((s, idx) => (
+                  <option key={`${s}-${idx}`} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "الحالة (اختياري)" : "Status (optional)"}
+              </label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                }}
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                <option value="finished">{isArabic ? "مكتملة" : "Finished"}</option>
+                <option value="ended">{isArabic ? "منتهية" : "Ended"}</option>
+                <option value="pending">{isArabic ? "معلقة" : "Pending"}</option>
+              </select>
+            </div>
+
+            {/* Recipients (multi-select from DB) */}
+            <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+              <label style={{ fontWeight: 600 }}>
+                {isArabic ? "المستلمون (اختياري)" : "Recipients (optional)"}
+              </label>
+              <select
+                multiple
+                value={selectedRecipients}
+                onChange={(e) => {
+                  const opts = Array.from(e.target.selectedOptions).map((o) => o.value);
+                  setSelectedRecipients(opts);
+                }}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--input-bg)",
+                  color: "var(--text)",
+                  minHeight: 96,
+                }}
+              >
+                {recipientsOpts.map((em, idx) => (
+                  <option key={`${em}-${idx}`} value={em}>{em}</option>
+                ))}
+              </select>
+              <small style={{ color: "var(--muted)" }}>
+                {isArabic ? "اتركها فارغة لإرسالها لكل المستلمين المفعّلين." : "Leave empty to send to all active recipients."}
+              </small>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSendOpen(false);
+                  setSelectedClientId("");
+                  setSelectedUserId("");
+                  setRegion(""); setCity(""); setStore(""); setStatus("");
+                  setSelectedRecipients([]);
+                }}
+                style={{
+                  padding: "8px 14px",
+                  border: "1px solid var(--divider)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  borderRadius: 6,
+                }}
+              >
+                {isArabic ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={isSending}
+                onClick={handleSendDailyReport}
+                style={{
+                  padding: "8px 14px",
+                  background: "var(--accent)",
+                  color: "var(--accent-foreground)",
+                  border: "none",
+                  borderRadius: 6,
+                  fontWeight: 700,
+                }}
+              >
+                {isSending ? (isArabic ? "جاري الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 12, padding: "18px 0", marginTop: "auto" }}>
         {T.footer}
       </div>
     </div>
