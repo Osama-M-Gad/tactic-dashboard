@@ -505,7 +505,7 @@ export default function InventoryReportPage() {
             selectsEnd
             startDate={dateFrom}
             endDate={dateTo}
-            minDate={dateFrom}
+            minDate={dateFrom || undefined}
             dateFormat="yyyy-MM-dd"
             placeholderText={ar ? "اختر تاريخ النهاية" : "Select end date"}
         />
