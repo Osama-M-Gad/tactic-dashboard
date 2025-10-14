@@ -122,92 +122,27 @@ export default function SuperAdminDashboardPage() {
   }, [profile, isArabic]);
 
   /* ===== Load clients on open ===== */
-  /* === Load dropdown options (regions/cities/stores/recipients) === */
-useEffect(() => {
-  if (!sendOpen) return;
+  useEffect(() => {
+    if (!sendOpen) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("client")
+          .select("id, name, name_ar")
+          .order("name", { ascending: true });
+        setClients((data as ClientLite[]) ?? []);
+      } catch {
+        const { data: fallback } = await supabase
+          .from("client")
+          .select("id, name, name_ar")
+          .order("id", { ascending: false })
+          .limit(500);
+        setClients((fallback as ClientLite[]) ?? []);
+      }
+    })();
+  }, [sendOpen]);
 
-  // helper: apply client filter if chosen
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const byClient = (q: any) => (selectedClientId ? q.eq("client_id", selectedClientId) : q);
-
-  (async () => {
-    // Regions
-    const { data: regRows } = await byClient(
-      supabase
-        .from("visits_details_v")
-        .select("market_region", { head: false, count: "exact" })
-        .not("market_region", "is", null)
-        .order("market_region", { ascending: true })
-        .returns<{ market_region: string | null }[]>()
-    );
-    setRegionsOpts(
-  uniqSorted(
-    (regRows ?? []).map((r: { market_region: string | null }) => r.market_region)
-  )
-);
-
-    // Cities (dependent on region if chosen)
-    let citiesQ = byClient(
-      supabase
-        .from("visits_details_v")
-        .select("market_city, market_region", { head: false, count: "exact" })
-        .not("market_city", "is", null)
-        .returns<{ market_city: string | null; market_region: string | null }[]>()
-    );
-    if (region) citiesQ = citiesQ.eq("market_region", region);
-    const { data: citRows } = await citiesQ.order("market_city", { ascending: true });
-    setCitiesOpts(
-  uniqSorted(
-    (citRows ?? []).map((r: { market_city: string | null }) => r.market_city)
-  )
-);
-
-    // Stores (dependent on region/city if chosen)
-    let storesQ = byClient(
-      supabase
-        .from("visits_details_v")
-        .select("market_store, market_region, market_city", { head: false, count: "exact" })
-        .not("market_store", "is", null)
-        .returns<{
-          market_store: string | null;
-          market_region: string | null;
-          market_city: string | null;
-        }[]>()
-    );
-    if (region) storesQ = storesQ.eq("market_region", region);
-    if (city) storesQ = storesQ.eq("market_city", city);
-    const { data: stoRows } = await storesQ.order("market_store", { ascending: true });
-    setStoresOpts(
-  uniqSorted(
-    (stoRows ?? []).map((r: { market_store: string | null }) => r.market_store)
-  )
-);
-    // Recipients from scheduled_email_reports (filtered by client if selected)
-    const rq = selectedClientId
-      ? supabase
-          .from("scheduled_email_reports")
-          .select("recipient_email", { head: false, count: "exact" })
-          .eq("is_active", true)
-          .eq("client_id", selectedClientId)
-          .order("recipient_email", { ascending: true })
-          .returns<{ recipient_email: string | null }[]>()
-      : supabase
-          .from("scheduled_email_reports")
-          .select("recipient_email", { head: false, count: "exact" })
-          .eq("is_active", true)
-          .order("recipient_email", { ascending: true })
-          .returns<{ recipient_email: string | null }[]>();
-
-    const { data: recRows } = await rq;
-    setRecipientsOpts(
-      uniqSorted((recRows ?? []).map((r: { recipient_email: string | null }) => r.recipient_email))
-    );
-  })();
-  // reload when these change
-}, [sendOpen, selectedClientId, region, city]);
-
-
-  /* === Load dropdown options (regions/cities/stores/recipients) — بدون distinct === */
+  /* === Load dropdown options (regions/cities/stores/recipients) — بدون .returns === */
   useEffect(() => {
     if (!sendOpen) return;
 
@@ -223,13 +158,12 @@ useEffect(() => {
           .select("market_region")
           .not("market_region", "is", null)
           .order("market_region", { ascending: true })
-          .returns<{ market_region: string | null }[]>()
       );
-     setRegionsOpts(
-  uniqSorted(
-    (regRows ?? []).map((r: { market_region: string | null }) => r.market_region)
-  )
-);
+      setRegionsOpts(
+        uniqSorted(
+          (regRows ?? []).map((r: { market_region: string | null }) => r.market_region)
+        )
+      );
 
       // Cities (dependent on region if chosen)
       let citiesQ = byClient(
@@ -239,14 +173,12 @@ useEffect(() => {
           .not("market_city", "is", null)
       );
       if (region) citiesQ = citiesQ.eq("market_region", region);
-      const { data: citRows } = await citiesQ
-        .order("market_city", { ascending: true })
-        .returns<{ market_city: string | null }[]>();
+      const { data: citRows } = await citiesQ.order("market_city", { ascending: true });
       setCitiesOpts(
-  uniqSorted(
-    (citRows ?? []).map((r: { market_city: string | null }) => r.market_city)
-  )
-);
+        uniqSorted(
+          (citRows ?? []).map((r: { market_city: string | null }) => r.market_city)
+        )
+      );
 
       // Stores (dependent on region/city if chosen)
       let storesQ = byClient(
@@ -257,40 +189,27 @@ useEffect(() => {
       );
       if (region) storesQ = storesQ.eq("market_region", region);
       if (city)   storesQ = storesQ.eq("market_city",   city);
-      const { data: stoRows } = await storesQ
-        .order("market_store", { ascending: true })
-        .returns<{ market_store: string | null }[]>();
+      const { data: stoRows } = await storesQ.order("market_store", { ascending: true });
       setStoresOpts(
-  uniqSorted(
-    (stoRows ?? []).map((r: { market_store: string | null }) => r.market_store)
-  )
-);
+        uniqSorted(
+          (stoRows ?? []).map((r: { market_store: string | null }) => r.market_store)
+        )
+      );
 
       // Recipients from scheduled_email_reports (filtered by client if selected)
-      const baseRec = supabase
+      let recQ = supabase
         .from("scheduled_email_reports")
         .select("recipient_email")
         .eq("is_active", true)
-        .order("recipient_email", { ascending: true })
-        .returns<{ recipient_email: string | null }[]>();
-
-      const { data: recRows } = selectedClientId
-        ? await baseRec.eq("client_id", selectedClientId)
-        : await baseRec;
-
-      setRecipientsOpts(uniqSorted((recRows ?? []).map(r => r.recipient_email)));
+        .order("recipient_email", { ascending: true });
+      if (selectedClientId) recQ = recQ.eq("client_id", selectedClientId);
+      const { data: recRows } = await recQ;
+      setRecipientsOpts(
+        uniqSorted((recRows ?? []).map((r: { recipient_email: string | null }) => r.recipient_email))
+      );
     })();
+    // reload when these change
   }, [sendOpen, selectedClientId, region, city]);
-useEffect(() => {
-  if (!sendOpen) return;
-  (async () => {
-    const { data } = await supabase
-      .from("client")
-      .select("id, name, name_ar")
-      .order("name", { ascending: true });
-    setClients((data as ClientLite[]) ?? []);
-  })();
-}, [sendOpen]);
 
   /* ===== Load users of selected client ===== */
   useEffect(() => {
@@ -305,8 +224,7 @@ useEffect(() => {
         const { data: links } = await supabase
           .from("client_users")
           .select("user_id")
-          .eq("client_id", selectedClientId)
-          .throwOnError();
+          .eq("client_id", selectedClientId);
 
         const ids = Array.from(new Set(((links ?? []) as { user_id: UUID }[]).map((r) => r.user_id)));
         if (ids.length === 0) {
@@ -319,8 +237,7 @@ useEffect(() => {
           .from("Users")
           .select("id, name, arabic_name")
           .in("id", ids)
-          .order("name", { ascending: true })
-          .throwOnError();
+          .order("name", { ascending: true });
 
         setClientUsers((users as UserLite[]) ?? []);
       } catch (err) {
