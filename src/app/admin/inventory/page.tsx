@@ -69,6 +69,43 @@ function EmptyBox({ text }: { text: string }) {
   );
 }
 
+/* ========= Open Photos Badge ========= */
+function OpenPhotosBadge({
+  count,
+  onClick,
+  label = "فتح",
+}: {
+  count: number;
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 56,
+        height: 44,
+        padding: "6px 10px",
+        borderRadius: 10,
+        border: "1px solid color-mix(in oklab, var(--accent) 50%, transparent)",
+        background: "color-mix(in oklab, var(--accent) 25%, var(--card))",
+        color: "var(--text)",
+        fontWeight: 800,
+        cursor: "pointer",
+        boxShadow:
+          "inset 0 1px 0 color-mix(in oklab, #fff 15%, transparent), 0 0 0 2px color-mix(in oklab, var(--accent) 15%, transparent)",
+      }}
+    >
+      <span style={{ lineHeight: 1 }}>{label}</span>
+      <span style={{ lineHeight: 1, opacity: 0.9 }}>({count})</span>
+    </button>
+  );
+}
+
 function btn(h?: number, selected = false): React.CSSProperties {
   return {
     display: "flex",
@@ -152,6 +189,36 @@ function DateField({
   );
 }
 
+/* ========= Golden Spinner ========= */
+function GoldenSpinner({ size = 72, thickness = 6 }: { size?: number; thickness?: number }) {
+  const accent = "var(--accent, #F5A623)";
+  const bg = "color-mix(in oklab, var(--card) 40%, transparent)";
+  return (
+    <>
+      <div
+        role="status"
+        aria-label="loading"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          border: `${thickness}px solid ${bg}`,
+          borderTopColor: accent,
+          animation: "spin 0.9s linear infinite",
+          boxShadow: `0 0 0 2px color-mix(in oklab, ${accent} 20%, transparent), inset 0 0 12px color-mix(in oklab, ${accent} 15%, transparent)`,
+        }}
+      />
+      <style jsx>{`
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+    </>
+  );
+}
+
 /* ========= Page ========= */
 export default function InventoryReportPage() {
   const { isArabic: ar } = useLangTheme();
@@ -175,7 +242,16 @@ export default function InventoryReportPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<InventoryReport[]>([]);
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [imgLoading, setImgLoading] = useState(false);
+
+  const openGallery = (arr: string[]) => {
+    if (!arr || arr.length === 0) return;
+    setLightboxImages(arr);
+    setLightboxIndex(0);
+    setImgLoading(true);
+  };
 
   /* Load client id */
   useEffect(() => {
@@ -183,6 +259,17 @@ export default function InventoryReportPage() {
     const cid = localStorage.getItem("client_id");
     setClientId(cid);
   }, []);
+
+  /* Lock body scroll when lightbox open */
+  useEffect(() => {
+    if (lightboxImages) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [lightboxImages]);
 
   /* Initial data: users & markets for that client */
   useEffect(() => {
@@ -347,16 +434,22 @@ export default function InventoryReportPage() {
     [ar]
   );
 
+  /* Keyboard: ESC + arrows */
   useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setModalOpen(false);
-        setLightboxImage(null);
+        setLightboxImages(null);
+        setLightboxIndex(0);
+      }
+      if (lightboxImages && lightboxImages.length > 1) {
+        if (e.key === "ArrowRight") setLightboxIndex((i) => (i + 1) % lightboxImages.length);
+        else if (e.key === "ArrowLeft") setLightboxIndex((i) => (i - 1 + lightboxImages.length) % lightboxImages.length);
       }
     };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, []);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxImages]);
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: 16 }}>
@@ -373,7 +466,12 @@ export default function InventoryReportPage() {
             backdropFilter: "blur(4px)",
           }}
         >
-          <div style={{ color: "var(--text)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <GoldenSpinner />
+            <div style={{ color: "var(--text)", fontWeight: 700, letterSpacing: 0.3 }}>
+              {ar ? "جاري التحميل..." : "Loading..."}
+            </div>
+          </div>
         </div>
       )}
 
@@ -674,10 +772,7 @@ export default function InventoryReportPage() {
                           <strong>{ar ? "متوفر" : "Available"}</strong>
                           {item.quantity && item.expiry_date && item.quantity.length > 0 ? (
                             item.quantity.map((qty, index) => (
-                              <div
-                                key={index}
-                                style={{ fontSize: "0.9em", opacity: 0.9, marginTop: 4, direction: "ltr" }}
-                              >
+                              <div key={index} style={{ fontSize: "0.9em", opacity: 0.9, marginTop: 4, direction: "ltr" }}>
                                 {qty} →{" "}
                                 {item.expiry_date?.[index]
                                   ? new Date(item.expiry_date[index]!).toLocaleDateString("en-CA")
@@ -700,24 +795,15 @@ export default function InventoryReportPage() {
                       {(ar ? item.reason?.reason_ar : item.reason?.reason_en) || item.custom_reason || "-"}
                     </td>
                     <td style={{ padding: "8px", textAlign: "center" }}>
-                      {item.photos && item.photos.length > 0
-                        ? item.photos.map((photo, i) => (
-                            <button
-                              onClick={() => setLightboxImage(photo)}
-                              key={i}
-                              style={{
-                                color: "var(--accent)",
-                                textDecoration: "underline",
-                                margin: "0 4px",
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                              }}
-                            >
-                              {ar ? `صورة ${i + 1}` : `Img ${i + 1}`}
-                            </button>
-                          ))
-                        : "-"}
+                      {item.photos && item.photos.length > 0 ? (
+                        <OpenPhotosBadge
+                          count={item.photos.length}
+                          label={ar ? "فتح" : "Open"}
+                          onClick={() => openGallery(item.photos!)}
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -727,10 +813,10 @@ export default function InventoryReportPage() {
         </div>
       )}
 
-      {/* Lightbox */}
-      {lightboxImage && (
+      {/* Lightbox (gallery) */}
+      {lightboxImages && (
         <div
-          onClick={() => setLightboxImage(null)}
+          onClick={() => setLightboxImages(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -740,16 +826,144 @@ export default function InventoryReportPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "16px",
+            padding: 16,
           }}
         >
-          <SupaImg src={lightboxImage} alt="Inventory" style={{ maxWidth: "90%", maxHeight: "90%", objectFit: "contain" }} />
+         {imgLoading && (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <GoldenSpinner />
+    </div>
+  )}
+
+  {/* العرض الرئيسي باستخدام SupaImg */}
+  <SupaImg
+    key={lightboxImages[lightboxIndex]}               // مهم لإجبار إعادة التركيب عند تغيير الصورة
+    src={lightboxImages[lightboxIndex]}
+    alt="Inventory"
+    onLoadingComplete={() => setImgLoading(false)}    // لو SupaImg يمررها لـ next/image
+    onError={() => setImgLoading(false)}
+    priority
+    style={{
+      maxWidth: "90%",
+      maxHeight: "90%",
+      objectFit: "contain",
+      opacity: imgLoading ? 0 : 1,                    // نحافظ على الـlayout ونظهر Fade
+      transition: "opacity .2s ease",
+    }}
+  />
+
+  {/* preloader مخفي يضمن firing لحدث onLoad حتى لو SupaImg ما يمرّرش الأحداث */}
+  <img
+    key={"preload-" + lightboxImages[lightboxIndex]}
+    src={lightboxImages[lightboxIndex]}
+    alt=""
+    loading="eager"
+    decoding="async"
+    onLoad={() => setImgLoading(false)}
+    onError={() => setImgLoading(false)}
+    style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+  />
+
+          {/* إغلاق */}
           <button
-            onClick={() => setLightboxImage(null)}
-            style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "white", fontSize: 32, cursor: "pointer" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightboxImages(null);
+              setLightboxIndex(0);
+            }}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              background: "none",
+              border: "1px solid rgba(255,255,255,0.4)",
+              color: "white",
+              fontSize: 26,
+              cursor: "pointer",
+              borderRadius: 8,
+              width: 44,
+              height: 44,
+              lineHeight: "42px",
+            }}
+            aria-label="Close"
           >
             &times;
           </button>
+
+          {/* تنقّل + عدّاد */}
+          {lightboxImages.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImgLoading(true);
+                  setLightboxIndex((i) => (i - 1 + lightboxImages.length) % lightboxImages.length);
+                }}
+                style={{
+                  position: "absolute",
+                  left: 16,
+                  background: "none",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  color: "white",
+                  fontSize: 22,
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  width: 44,
+                  height: 44,
+                }}
+                aria-label="Prev"
+              >
+                ‹
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImgLoading(true);
+                  setLightboxIndex((i) => (i + 1) % lightboxImages.length);
+                }}
+                style={{
+                  position: "absolute",
+                  right: 16,
+                  background: "none",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  color: "white",
+                  fontSize: 22,
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  width: 44,
+                  height: 44,
+                }}
+                aria-label="Next"
+              >
+                ›
+              </button>
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 16,
+                  right: 16,
+                  background: "rgba(0,0,0,0.5)",
+                  color: "white",
+                  padding: "6px 10px",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                }}
+              >
+                {lightboxIndex + 1} / {lightboxImages.length}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
