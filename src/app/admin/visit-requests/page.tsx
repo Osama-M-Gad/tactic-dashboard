@@ -588,7 +588,7 @@ const DASH_HOME = process.env.NEXT_PUBLIC_DASH_HOME || "/admin/dashboard";
                   selected={toDate}
                   onChange={handleDateToChange}
                   selectsEnd
-                  minDate={fromDate}
+                  minDate={fromDate ?? undefined} 
                   dateFormat="yyyy/MM/dd"
                   placeholderText={isAr ? "اختر التاريخ" : "Pick date"}
                   className="date-picker-input"
