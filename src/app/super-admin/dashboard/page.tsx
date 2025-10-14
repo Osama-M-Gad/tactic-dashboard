@@ -24,11 +24,10 @@ type SendReportResponse = { ok?: boolean; sent?: number; error?: string };
 
 /* ========= Helpers (normalize + dedupe + sort) ========= */
 const norm = (s: unknown) => String(s ?? "").trim();
-const uniqSorted = (arr: unknown[]) =>
-  Array.from(new Set(arr.map(norm)))
+const uniqSorted = (arr: Array<string | null | undefined>) =>
+  Array.from(new Set(arr.filter((v): v is string => !!v).map(norm)))
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "ar"));
-
 
 /* ========= Page ========= */
 export default function SuperAdminDashboardPage() {
@@ -147,7 +146,7 @@ export default function SuperAdminDashboardPage() {
     })();
   }, [sendOpen]);
 
-  /* === Load dropdown options (regions/cities/stores/recipients) === */
+  /* === Load dropdown options (regions/cities/stores/recipients) — بدون distinct === */
   useEffect(() => {
     if (!sendOpen) return;
 
@@ -157,53 +156,56 @@ export default function SuperAdminDashboardPage() {
 
     (async () => {
       // Regions
-      const { data: reg } = await byClient(
+      const { data: regRows } = await byClient(
         supabase
           .from("visits_details_v")
-          .select("market_region", { distinct: true })
+          .select("market_region")
           .not("market_region", "is", null)
           .order("market_region", { ascending: true })
+          .returns<{ market_region: string | null }[]>()
       );
-      setRegionsOpts(uniqSorted((reg ?? []).map((r: { market_region: string }) => r.market_region)));
+      setRegionsOpts(uniqSorted((regRows ?? []).map(r => r.market_region)));
 
       // Cities (dependent on region if chosen)
       let citiesQ = byClient(
         supabase
           .from("visits_details_v")
-          .select("market_city, market_region", { distinct: true })
+          .select("market_city, market_region")
           .not("market_city", "is", null)
       );
       if (region) citiesQ = citiesQ.eq("market_region", region);
-      const { data: cit } = await citiesQ.order("market_city", { ascending: true });
-      setCitiesOpts(uniqSorted((cit ?? []).map((r: { market_city: string }) => r.market_city)));
+      const { data: citRows } = await citiesQ
+        .order("market_city", { ascending: true })
+        .returns<{ market_city: string | null }[]>();
+      setCitiesOpts(uniqSorted((citRows ?? []).map(r => r.market_city)));
 
       // Stores (dependent on region/city if chosen)
       let storesQ = byClient(
         supabase
           .from("visits_details_v")
-          .select("market_store, market_region, market_city", { distinct: true })
+          .select("market_store, market_region, market_city")
           .not("market_store", "is", null)
       );
       if (region) storesQ = storesQ.eq("market_region", region);
       if (city)   storesQ = storesQ.eq("market_city",   city);
-      const { data: sto } = await storesQ.order("market_store", { ascending: true });
-      setStoresOpts(uniqSorted((sto ?? []).map((r: { market_store: string }) => r.market_store)));
+      const { data: stoRows } = await storesQ
+        .order("market_store", { ascending: true })
+        .returns<{ market_store: string | null }[]>();
+      setStoresOpts(uniqSorted((stoRows ?? []).map(r => r.market_store)));
 
       // Recipients from scheduled_email_reports (filtered by client if selected)
-      const { data: rec } = await (selectedClientId
-        ? supabase
-            .from("scheduled_email_reports")
-            .select("recipient_email", { distinct: true })
-            .eq("is_active", true)
-            .eq("client_id", selectedClientId)
-            .order("recipient_email", { ascending: true })
-        : supabase
-            .from("scheduled_email_reports")
-            .select("recipient_email", { distinct: true })
-            .eq("is_active", true)
-            .order("recipient_email", { ascending: true })
-      );
-      setRecipientsOpts(uniqSorted((rec ?? []).map((r: { recipient_email: string }) => r.recipient_email)));
+      const baseRec = supabase
+        .from("scheduled_email_reports")
+        .select("recipient_email")
+        .eq("is_active", true)
+        .order("recipient_email", { ascending: true })
+        .returns<{ recipient_email: string | null }[]>();
+
+      const { data: recRows } = selectedClientId
+        ? await baseRec.eq("client_id", selectedClientId)
+        : await baseRec;
+
+      setRecipientsOpts(uniqSorted((recRows ?? []).map(r => r.recipient_email)));
     })();
   }, [sendOpen, selectedClientId, region, city]);
 
@@ -277,9 +279,7 @@ export default function SuperAdminDashboardPage() {
       // تحديد المستلمين (اختياري) من الـ multi-select
       if (selectedRecipients.length > 0) body.recipient_emails = selectedRecipients;
 
-console.log("send-daily-report body >>>", body);
-      
-const { data, error } = await supabase.functions.invoke<SendReportResponse>("send-daily-report", {
+      const { data, error } = await supabase.functions.invoke<SendReportResponse>("send-daily-report", {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body,
       });
