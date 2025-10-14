@@ -861,7 +861,7 @@ export default function AdminDashboardPage() {
                 selectsEnd
                 startDate={dateFrom}
                 endDate={dateTo}
-                minDate={dateFrom}
+                minDate={dateFrom || undefined}
                 dateFormat="yyyy-MM-dd"
                 placeholderText={isAr ? "اختر تاريخ" : "Select date"}
                 className="capsule-datepicker"
