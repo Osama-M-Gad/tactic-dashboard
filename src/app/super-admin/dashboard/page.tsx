@@ -141,8 +141,10 @@ useEffect(() => {
         .returns<{ market_region: string | null }[]>()
     );
     setRegionsOpts(
-      uniqSorted((regRows ?? []).map((r: { market_region: string | null }) => r.market_region))
-    );
+  uniqSorted(
+    (regRows ?? []).map((r: { market_region: string | null }) => r.market_region)
+  )
+);
 
     // Cities (dependent on region if chosen)
     let citiesQ = byClient(
@@ -155,8 +157,10 @@ useEffect(() => {
     if (region) citiesQ = citiesQ.eq("market_region", region);
     const { data: citRows } = await citiesQ.order("market_city", { ascending: true });
     setCitiesOpts(
-      uniqSorted((citRows ?? []).map((r: { market_city: string | null }) => r.market_city))
-    );
+  uniqSorted(
+    (citRows ?? []).map((r: { market_city: string | null }) => r.market_city)
+  )
+);
 
     // Stores (dependent on region/city if chosen)
     let storesQ = byClient(
@@ -174,9 +178,10 @@ useEffect(() => {
     if (city) storesQ = storesQ.eq("market_city", city);
     const { data: stoRows } = await storesQ.order("market_store", { ascending: true });
     setStoresOpts(
-      uniqSorted((stoRows ?? []).map((r: { market_store: string | null }) => r.market_store))
-    );
-
+  uniqSorted(
+    (stoRows ?? []).map((r: { market_store: string | null }) => r.market_store)
+  )
+);
     // Recipients from scheduled_email_reports (filtered by client if selected)
     const rq = selectedClientId
       ? supabase
@@ -220,7 +225,11 @@ useEffect(() => {
           .order("market_region", { ascending: true })
           .returns<{ market_region: string | null }[]>()
       );
-      setRegionsOpts(uniqSorted((regRows ?? []).map(r => r.market_region)));
+     setRegionsOpts(
+  uniqSorted(
+    (regRows ?? []).map((r: { market_region: string | null }) => r.market_region)
+  )
+);
 
       // Cities (dependent on region if chosen)
       let citiesQ = byClient(
@@ -233,7 +242,11 @@ useEffect(() => {
       const { data: citRows } = await citiesQ
         .order("market_city", { ascending: true })
         .returns<{ market_city: string | null }[]>();
-      setCitiesOpts(uniqSorted((citRows ?? []).map(r => r.market_city)));
+      setCitiesOpts(
+  uniqSorted(
+    (citRows ?? []).map((r: { market_city: string | null }) => r.market_city)
+  )
+);
 
       // Stores (dependent on region/city if chosen)
       let storesQ = byClient(
@@ -247,7 +260,11 @@ useEffect(() => {
       const { data: stoRows } = await storesQ
         .order("market_store", { ascending: true })
         .returns<{ market_store: string | null }[]>();
-      setStoresOpts(uniqSorted((stoRows ?? []).map(r => r.market_store)));
+      setStoresOpts(
+  uniqSorted(
+    (stoRows ?? []).map((r: { market_store: string | null }) => r.market_store)
+  )
+);
 
       // Recipients from scheduled_email_reports (filtered by client if selected)
       const baseRec = supabase
