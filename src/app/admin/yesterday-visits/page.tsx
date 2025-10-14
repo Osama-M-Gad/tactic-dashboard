@@ -10,36 +10,152 @@ import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
 
 /* ========= Supabase ===== */
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "");
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+);
 
 /* ========= Types ========= */
 type UUID = string;
-type UserLite = { id: UUID; username: string | null; name: string | null; arabic_name: string | null; team_leader_id: UUID | null; };
-type Market = { id: UUID; region: string | null; city: string | null; store: string | null; branch: string | null; };
-type SnapshotRow = { id: UUID; user_id: UUID; market_id: UUID; client_id: UUID | null; status: string | null; started_at: string | null; finished_at: string | null; end_reason: string | null; end_reason_ar: string | null; end_reason_en: string | null; end_visit_photo: string | null; user?: UserLite | null; team_leader?: UserLite | null; market?: Market | null; };
-type VisitDetailsRow = { id: string; status: string; started_at: string | null; finished_at: string | null; end_reason: string | null; end_reason_ar: string | null; end_reason_en: string | null; end_visit_photo: string | null; user_id: string | null; user_name: string | null; user_arabic_name: string | null; user_username: string | null; team_leader_id: string | null; team_leader_name: string | null; team_leader_arabic_name: string | null; team_leader_username: string | null; market_id: string | null; market_store: string | null; market_branch: string | null; market_city: string | null; market_region: string | null; };
-type Stats = { total: number; finished: number; ended: number; pending: number; finished_pct: number; average_ms_completed: number; };
-type CountCard = { key: string; label: string; value: number | string; pct: number; mode: "count"; };
-type TextCard = { key: string; label: string; value: string; pct: number; mode: "text"; };
+type UserLite = {
+  id: UUID;
+  username: string | null;
+  name: string | null;
+  arabic_name: string | null;
+  team_leader_id: UUID | null;
+};
+type Market = {
+  id: UUID;
+  region: string | null;
+  city: string | null;
+  store: string | null;
+  branch: string | null;
+};
+
+type SnapshotRow = {
+  id: UUID;
+  user_id: UUID;
+  market_id: UUID;
+  client_id: UUID | null;
+  status: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  end_reason: string | null;
+  end_reason_ar: string | null;
+  end_reason_en: string | null;
+  end_visit_photo: string | null;
+  jp_state?: "IN JP" | "OUT OF JP" | null;
+  user?: UserLite | null;
+  team_leader?: UserLite | null;
+  market?: Market | null;
+};
+
+type VisitDetailsRow = {
+  id: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  end_reason: string | null;
+  end_reason_ar: string | null;
+  end_reason_en: string | null;
+  end_visit_photo: string | null;
+  user_id: string | null;
+  user_name: string | null;
+  user_arabic_name: string | null;
+  user_username: string | null;
+  team_leader_id: string | null;
+  team_leader_name: string | null;
+  team_leader_arabic_name: string | null;
+  team_leader_username: string | null;
+  market_id: string | null;
+  market_store: string | null;
+  market_branch: string | null;
+  market_city: string | null;
+  market_region: string | null;
+  jp_state?: "IN JP" | "OUT OF JP" | null;
+};
+
+type Stats = {
+  total: number;
+  finished: number;
+  ended: number;
+  pending: number;
+  finished_pct: number;
+  average_ms_completed: number;
+};
+
+type CountCard = { key: string; label: string; value: number | string; pct: number; mode: "count" };
+type TextCard = { key: string; label: string; value: string; pct: number; mode: "text" };
 type Card = CountCard | TextCard;
+type JPState = "IN JP" | "OUT OF JP";
+type JPStateFilter = "" | JPState;
+
+function isJPStateFilter(v: string): v is JPStateFilter {
+  return v === "" || v === "IN JP" || v === "OUT OF JP";
+}
+
+function GoldenSpinner({ size = 72, thickness = 6 }: { size?: number; thickness?: number }) {
+  const accent = "var(--accent, #F5A623)";
+  const bg = "color-mix(in oklab, var(--card) 40%, transparent)";
+  return (
+    <>
+      <div
+        role="status"
+        aria-label="loading"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          border: `${thickness}px solid ${bg}`,
+          borderTopColor: accent,
+          animation: "spin 0.9s linear infinite",
+          boxShadow: `0 0 0 2px color-mix(in oklab, ${accent} 20%, transparent), inset 0 0 12px color-mix(in oklab, ${accent} 15%, transparent)`,
+        }}
+      />
+      <style jsx>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </>
+  );
+}
 
 /* ========= Utils ========= */
 function parseImagePaths(value: unknown): string[] {
   if (!value) return [];
   let data: unknown;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       try { data = JSON.parse(trimmed); } catch { return []; }
     } else { return trimmed.split(/[\s,]+/).filter(Boolean); }
   } else { data = value; }
-  if (Array.isArray(data)) { return data.flat(Infinity).filter((item): item is string => typeof item === 'string'); }
+  if (Array.isArray(data)) return data.flat(Infinity).filter((x): x is string => typeof x === "string");
   return [];
 }
-function ksaDate(d = new Date()) { return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }); }
-function toKSAClock(iso: string | null, isAr: boolean) { if (!iso) return "-"; const dt = new Date(iso); return dt.toLocaleTimeString(isAr ? "ar-EG" : "en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Riyadh", }); }
-function msToClock(ms: number) { if (ms <= 0) return "00:00"; const totalSec = Math.floor(ms / 1000); const h = Math.floor(totalSec / 3600); const m = Math.floor((totalSec % 3600) / 60); const s = totalSec % 60; if (h > 0) return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; }
-function userDisplay(u: Pick<UserLite, "username" | "name" | "arabic_name"> | null | undefined, isAr = false) { if (!u) return isAr ? "غير معروف" : "Unknown"; const disp = (isAr ? u.arabic_name : u.name) || u.username; return disp || (isAr ? "غير معروف" : "Unknown"); }
+function ksaDate(d = new Date()) {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+}
+function toKSAClock(iso: string | null, isAr: boolean) {
+  if (!iso) return "-";
+  const dt = new Date(iso);
+  return dt.toLocaleTimeString(isAr ? "ar-EG" : "en-US", {
+    hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Riyadh",
+  });
+}
+function msToClock(ms: number) {
+  if (ms <= 0) return "00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+function userDisplay(u: Pick<UserLite,"username"|"name"|"arabic_name"> | null | undefined, isAr=false) {
+  if (!u) return isAr ? "غير معروف" : "Unknown";
+  const disp = (isAr ? u.arabic_name : u.name) || u.username;
+  return disp || (isAr ? "غير معروف" : "Unknown");
+}
 
 /* ========= Page ========= */
 export default function YesterdayVisitsPage() {
@@ -49,13 +165,22 @@ export default function YesterdayVisitsPage() {
 
   const [booting, setBooting] = useState(true);
   const [clientId, setClientId] = useState<UUID | null>(null);
-  const [viewer, setViewer] = useState<{ open: boolean; imgs: string[]; index: number; title?: string }>({ open: false, imgs: [], index: 0, title: "" });
-  const yesterday = useMemo(() => { const y = new Date(); y.setDate(y.getDate() - 1); return ksaDate(y); }, []);
+
+  const [viewer, setViewer] = useState<{ open: boolean; imgs: string[]; index: number; title?: string }>({
+    open: false, imgs: [], index: 0, title: "",
+  });
+
+  const yesterday = useMemo(() => {
+    const y = new Date(); y.setDate(y.getDate() - 1); return ksaDate(y);
+  }, []);
+
   const [selectedRegion, setSelectedRegion] = useState<string>(params.get("region") || "");
   const [selectedCity, setSelectedCity] = useState<string>(params.get("city") || "");
   const [selectedStore, setSelectedStore] = useState<string>((params.get("market") || "").trim());
   const [selectedTL, setSelectedTL] = useState<string>(params.get("tl") || "");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedJP, setSelectedJP] = useState<JPStateFilter>("");
+
   const [regions, setRegions] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [stores, setStores] = useState<string[]>([]);
@@ -63,10 +188,14 @@ export default function YesterdayVisitsPage() {
   const [rows, setRows] = useState<SnapshotRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const openViewer = (imgs: string[], title?: string, index = 0) => setViewer({ open: true, imgs, index, title });
+  const [imgLoading, setImgLoading] = useState(false);
+
+  const openViewer = (imgs: string[], title?: string, index = 0) => {
+    setViewer({ open: true, imgs, index, title }); setImgLoading(true);
+  };
   const closeViewer = () => setViewer((v) => ({ ...v, open: false }));
-  const prevImg = () => setViewer((v) => ({ ...v, index: (v.index - 1 + v.imgs.length) % v.imgs.length }));
-  const nextImg = () => setViewer((v) => ({ ...v, index: (v.index + 1) % v.imgs.length }));
+  const prevImg = () => { setViewer((v) => ({ ...v, index: (v.index - 1 + v.imgs.length) % v.imgs.length })); setImgLoading(true); };
+  const nextImg = () => { setViewer((v) => ({ ...v, index: (v.index + 1) % v.imgs.length })); setImgLoading(true); };
 
   useEffect(() => {
     if (!viewer.open) return;
@@ -85,7 +214,12 @@ export default function YesterdayVisitsPage() {
       if (!data?.session) { router.replace("/login"); return; }
       let cid = localStorage.getItem("client_id");
       if (!cid) {
-        const { data: cu } = await supabase.from("client_users").select("client_id").eq("user_id", data.session.user.id).eq("is_active", true).single();
+        const { data: cu } = await supabase
+          .from("client_users")
+          .select("client_id")
+          .eq("user_id", data.session.user.id)
+          .eq("is_active", true)
+          .single();
         if (cu?.client_id) { cid = String(cu.client_id); localStorage.setItem("client_id", cid); }
       }
       if (!cid) { router.replace("/no-access"); return; }
@@ -97,9 +231,41 @@ export default function YesterdayVisitsPage() {
   const fetchTable = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc("get_yesterday_visits_details", { p_client_id: clientId, p_snapshot_date: yesterday });
+    const { data, error } = await supabase.rpc("get_yesterday_visits_details", {
+      p_client_id: clientId, p_snapshot_date: yesterday,
+    });
     if (error) { console.error("[fetchTable RPC] error:", error); setRows([]); setLoading(false); return; }
-    const hydrated: SnapshotRow[] = (data || []).map((r: VisitDetailsRow) => ({ id: r.id, status: r.status, started_at: r.started_at, finished_at: r.finished_at, end_reason: r.end_reason, end_reason_ar: r.end_reason_ar, end_reason_en: r.end_reason_en, end_visit_photo: r.end_visit_photo, user_id: r.user_id || "", market_id: r.market_id || "", client_id: clientId, user: { id: r.user_id || "", name: r.user_name, arabic_name: r.user_arabic_name, username: r.user_username, team_leader_id: r.team_leader_id, }, market: r.market_id ? { id: r.market_id, store: r.market_store, branch: r.market_branch, city: r.market_city, region: r.market_region } : null, team_leader: r.team_leader_id ? { id: r.team_leader_id, name: r.team_leader_name, arabic_name: r.team_leader_arabic_name, username: r.team_leader_username, team_leader_id: null } : null, }));
+
+    const hydrated: SnapshotRow[] = (data || []).map((r: VisitDetailsRow) => ({
+      id: r.id,
+      status: r.status,
+      started_at: r.started_at,
+      finished_at: r.finished_at,
+      end_reason: r.end_reason,
+      end_reason_ar: r.end_reason_ar,
+      end_reason_en: r.end_reason_en,
+      end_visit_photo: r.end_visit_photo,
+      jp_state: r.jp_state ?? null, // ⬅️ نحاول نقرأها من الـ RPC
+
+      user_id: r.user_id || "",
+      market_id: r.market_id || "",
+      client_id: clientId,
+
+      user: {
+        id: r.user_id || "",
+        name: r.user_name,
+        arabic_name: r.user_arabic_name,
+        username: r.user_username,
+        team_leader_id: r.team_leader_id,
+      },
+      market: r.market_id
+        ? { id: r.market_id, store: r.market_store, branch: r.market_branch, city: r.market_city, region: r.market_region }
+        : null,
+      team_leader: r.team_leader_id
+        ? { id: r.team_leader_id, name: r.team_leader_name, arabic_name: r.team_leader_arabic_name, username: r.team_leader_username, team_leader_id: null }
+        : null,
+    }));
+
     setRows(hydrated);
     setLoading(false);
   }, [clientId, yesterday]);
@@ -111,8 +277,18 @@ export default function YesterdayVisitsPage() {
     return isAr ? "معلقة" : "Pending";
   }, [isAr]);
 
+  // عرض JP النهائي (بالfallback لو الـ DB مرجعش القيمة)
+  const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" | "-" => {
+    if (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") return r.jp_state;
+    // Pending في الـ snapshots = IN JP حسب القاعدة
+    const st = rowStatus(r);
+    if (st === (isAr ? "معلقة" : "Pending")) return "IN JP";
+    return "-";
+  }, [rowStatus, isAr]);
+
   const hydrateFilters = useCallback(() => {
-    const rset = new Set<string>(); const cset = new Set<string>(); const sset = new Set<string>(); const tlset = new Map<UUID, UserLite>();
+    const rset = new Set<string>(), cset = new Set<string>(), sset = new Set<string>();
+    const tlset = new Map<UUID, UserLite>();
     rows.forEach((r) => {
       if (r.market?.region) rset.add(r.market.region);
       if (r.market?.city) cset.add(r.market.city);
@@ -120,7 +296,10 @@ export default function YesterdayVisitsPage() {
       if (r.team_leader?.id) tlset.set(r.team_leader.id, r.team_leader);
     });
     const sortAr = (a: string, b: string) => a.localeCompare(b, "ar");
-    setRegions(Array.from(rset).sort(sortAr)); setCities(Array.from(cset).sort(sortAr)); setStores(Array.from(sset).sort(sortAr)); setTeamLeaders(Array.from(tlset.values()));
+    setRegions(Array.from(rset).sort(sortAr));
+    setCities(Array.from(cset).sort(sortAr));
+    setStores(Array.from(sset).sort(sortAr));
+    setTeamLeaders(Array.from(tlset.values()));
   }, [rows]);
 
   useEffect(() => { if (!clientId) return; fetchTable(); }, [clientId, fetchTable]);
@@ -133,19 +312,22 @@ export default function YesterdayVisitsPage() {
       const okS = selectedStore ? r.market?.store === selectedStore : true;
       const okTL = selectedTL ? r.user?.team_leader_id === selectedTL : true;
       const okStatus = selectedStatus ? rowStatus(r) === selectedStatus : true;
-      return okR && okC && okS && okTL && okStatus;
+      const jp = rowJP(r);
+      const okJP = selectedJP ? jp === selectedJP : true;
+      return okR && okC && okS && okTL && okStatus && okJP;
     });
-  }, [rows, selectedRegion, selectedCity, selectedStore, selectedTL, selectedStatus, rowStatus]);
+  }, [rows, selectedRegion, selectedCity, selectedStore, selectedTL, selectedStatus, selectedJP, rowStatus, rowJP]);
 
   const rowDurationMs = (r: SnapshotRow) => {
     if (!(r.started_at && r.finished_at)) return 0;
-    const start = new Date(r.started_at).getTime(); const end = new Date(r.finished_at).getTime();
+    const start = new Date(r.started_at).getTime();
+    const end = new Date(r.finished_at).getTime();
     return Math.max(0, end - start);
   };
 
   const stats: Stats = useMemo(() => {
     const total = filteredRows.length;
-    const ended = filteredRows.filter((r) => (r.end_reason_ar || r.end_reason_en) && String(r.end_reason_ar || r.end_reason_en).trim().length > 0).length;
+    const ended = filteredRows.filter((r) => (r.end_reason_ar || r.end_reason_en)?.toString().trim().length).length;
     const finishedRows = filteredRows.filter((r) => !(r.end_reason_ar || r.end_reason_en) && r.started_at && r.finished_at);
     const finished = finishedRows.length;
     const pending = total - ended - finished;
@@ -162,56 +344,207 @@ export default function YesterdayVisitsPage() {
     { key: "avg", label: isAr ? "متوسط مدة المكتملة" : "Avg Duration (Finished)", value: msToClock(stats.average_ms_completed), pct: 100, mode: "text" },
   ]), [stats, isAr]);
 
-  const primaryBtnStyle: React.CSSProperties = { backgroundColor: "var(--accent)", color: "var(--accent-foreground)", padding: "8px 12px", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer", };
-  const capsuleStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 9999, padding: 6, whiteSpace: "nowrap", };
-  const itemShell: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: 9999, padding: "6px 10px", whiteSpace: "nowrap", };
-  const itemLabel: React.CSSProperties = { fontSize: 12, color: "var(--muted)", };
-  const baseField: React.CSSProperties = { border: "none", outline: "none", backgroundColor: "transparent", color: "var(--input-text)", fontSize: 13, minWidth: 110, appearance: "none", };
+  const primaryBtnStyle: React.CSSProperties = {
+    backgroundColor: "var(--accent)", color: "var(--accent-foreground)", padding: "8px 12px",
+    border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer",
+  };
+  const capsuleStyle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 8, background: "var(--card)",
+    border: "1px solid var(--divider)", borderRadius: 9999, padding: 6, whiteSpace: "nowrap",
+  };
+  const itemShell: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 6, background: "var(--input-bg)",
+    border: "1px solid var(--input-border)", borderRadius: 9999, padding: "6px 10px", whiteSpace: "nowrap",
+  };
+  const itemLabel: React.CSSProperties = { fontSize: 12, color: "var(--muted)" };
+  const baseField: React.CSSProperties = {
+    border: "none", outline: "none", backgroundColor: "transparent", color: "var(--input-text)",
+    fontSize: 13, minWidth: 110, appearance: "none",
+  };
   const capsuleSelect: React.CSSProperties = { ...baseField, paddingInlineEnd: 14 };
-  const thStyle: React.CSSProperties = { textAlign: "center", padding: "12px 10px", fontWeight: 800, borderBottom: "1px solid var(--divider)", };
-  const tdStyle: React.CSSProperties = { textAlign: "center", padding: "12px 10px", };
-  const tdCenterMuted: React.CSSProperties = { textAlign: "center", padding: 20, color: "var(--muted)", };
-  const modalOverlayStyle: React.CSSProperties = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0, 0, 0, 0.75)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, cursor: "zoom-out" };
-  const modalContentStyle: React.CSSProperties = { position: 'relative', maxWidth: '96vw', width: 'auto', maxHeight: '90vh', backgroundColor: 'var(--card)', borderRadius: 16, padding: 12, border: '1px solid var(--divider)', cursor: 'default' };
-  const modalCloseButtonStyle: React.CSSProperties = { position: "absolute", top: "10px", right: "15px", background: "transparent", border: "none", color: "var(--text)", fontSize: "28px", cursor: "pointer", lineHeight: 1, zIndex: 10 };
-  
-  if (booting) { return (<div style={{ minHeight: "60vh", display: "grid", placeItems: "center", color: "var(--text)" }}>{isAr ? "جاري التحقق من الجلسة…" : "Checking session…"}</div>); }
+  const thStyle: React.CSSProperties = {
+    textAlign: "center", padding: "12px 10px", fontWeight: 800, borderBottom: "1px solid var(--divider)",
+  };
+  const tdStyle: React.CSSProperties = { textAlign: "center", padding: "12px 10px" };
+  const tdCenterMuted: React.CSSProperties = { textAlign: "center", padding: 20, color: "var(--muted)" };
+  const modalOverlayStyle: React.CSSProperties = {
+    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.75)", display: "flex", justifyContent: "center", alignItems: "center",
+    zIndex: 1000, cursor: "zoom-out"
+  };
+  const modalContentStyle: React.CSSProperties = {
+    position: "relative", maxWidth: "96vw", width: "auto", maxHeight: "90vh",
+    backgroundColor: "var(--card)", borderRadius: 16, padding: 12, border: "1px solid var(--divider)", cursor: "default"
+  };
+  const modalCloseButtonStyle: React.CSSProperties = {
+    position: "absolute", top: "10px", background: "transparent", border: "none",
+    color: "var(--text)", fontSize: "28px", cursor: "pointer", lineHeight: 1, zIndex: 10,
+    ...(isAr ? { left: "15px" } : { right: "15px" }),
+  };
+
+  if (booting) {
+    return (
+      <div style={{ minHeight: "60vh", display: "grid", placeItems: "center", color: "var(--text)" }}>
+        {isAr ? "جاري التحقق من الجلسة…" : "Checking session…"}
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", padding: 16, color: "var(--text)", background: "var(--bg)" }}>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-        <div style={{ width: "min(1100px, 94vw)", display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between", background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, padding: "10px 14px", }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{isAr ? "زيارات أمس" : "Yesterday’s Visits"} — {yesterday}</div>
-          <button onClick={() => router.push("/admin/dashboard")} style={primaryBtnStyle}>{isAr ? "رجوع" : "Back"}</button>
+        <div
+          style={{
+            width: "min(1100px, 94vw)", display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between",
+            background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, padding: "10px 14px",
+          }}
+        >
+          <div style={{ fontWeight: 800, fontSize: 18 }}>
+            {isAr ? "زيارات أمس" : "Yesterday’s Visits"} — {yesterday}
+          </div>
+          <button onClick={() => router.push("/admin/dashboard")} style={primaryBtnStyle}>
+            {isAr ? "رجوع" : "Back"}
+          </button>
         </div>
       </div>
+
+      {/* Filters */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
         <div style={{ width: "min(1100px, 94vw)" }}>
           <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
             <div style={capsuleStyle}>
-              <div style={itemShell}><span style={itemLabel}>{isAr ? "الحالة" : "Status"}</span><span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span><select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={capsuleSelect}><option value="">{isAr ? "الكل" : "All"}</option><option value={isAr ? "مكتملة" : "Finished"}>{isAr ? "مكتملة" : "Finished"}</option><option value={isAr ? "منتهية" : "Ended"}>{isAr ? "منتهية" : "Ended"}</option><option value={isAr ? "معلقة" : "Pending"}>{isAr ? "معلقة" : "Pending"}</option></select></div>
-              <div style={itemShell}><span style={itemLabel}>{isAr ? "المنطقة" : "Region"}</span><span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span><select value={selectedRegion} onChange={(e) => { setSelectedRegion(e.target.value); setSelectedCity(""); setSelectedStore(""); }} style={capsuleSelect}><option value="">{isAr ? "الكل" : "All"}</option>{regions.map((r) => (<option key={r} value={r}>{r}</option>))}</select></div>
-              <div style={itemShell}><span style={itemLabel}>{isAr ? "المدينة" : "City"}</span><span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span><select value={selectedCity} onChange={(e) => { setSelectedCity(e.target.value); setSelectedStore(""); }} style={capsuleSelect}><option value="">{isAr ? "الكل" : "All"}</option>{cities.filter((c) => !selectedRegion || rows.some((r) => r.market?.region === selectedRegion && r.market?.city === c)).map((c) => (<option key={c} value={c}>{c}</option>))}</select></div>
-              <div style={itemShell}><span style={itemLabel}>{isAr ? "السوق" : "Market"}</span><span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span><select value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)} style={capsuleSelect}><option value="">{isAr ? "الكل" : "All"}</option>{stores.filter((s) => rows.some((r) => (!selectedRegion || r.market?.region === selectedRegion) && (!selectedCity || r.market?.city === selectedCity) && r.market?.store === s)).map((s) => (<option key={s} value={s}>{s}</option>))}</select></div>
-              <div style={itemShell}><span style={itemLabel}>{isAr ? "قائد الفريق" : "Team Leader"}</span><span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span><select value={selectedTL} onChange={(e) => setSelectedTL(e.target.value)} style={capsuleSelect}><option value="">{isAr ? "الكل" : "All"}</option>{teamLeaders.map((tl) => (<option key={tl.id} value={tl.id}>{userDisplay(tl, isAr)}</option>))}</select></div>
-              <button onClick={fetchTable} style={{ ...primaryBtnStyle, border: "1px solid var(--divider)" }}>{isAr ? "تحديث" : "Refresh"}</button>
-              <button onClick={() => { setSelectedRegion(""); setSelectedCity(""); setSelectedStore(""); setSelectedTL(""); setSelectedStatus(""); fetchTable(); }} style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--divider)", borderRadius: 10, padding: "8px 12px", fontWeight: 800, cursor: "pointer", }}>{isAr ? "تصفير الفلاتر" : "Clear Filters"}</button>
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "الحالة" : "Status"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+                <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={capsuleSelect}>
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  <option value={isAr ? "مكتملة" : "Finished"}>{isAr ? "مكتملة" : "Finished"}</option>
+                  <option value={isAr ? "منتهية" : "Ended"}>{isAr ? "منتهية" : "Ended"}</option>
+                  <option value={isAr ? "معلقة" : "Pending"}>{isAr ? "معلقة" : "Pending"}</option>
+                </select>
+              </div>
+
+              {/* فلتر JP */}
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "رحلة العمل" : "JP State"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+               <select
+  value={selectedJP}
+  onChange={(e) => {
+    const v = e.target.value;
+    if (isJPStateFilter(v)) setSelectedJP(v);
+  }}
+  style={capsuleSelect}
+>
+
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  <option value="IN JP">IN JP</option>
+                  <option value="OUT OF JP">OUT OF JP</option>
+                </select>
+              </div>
+
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "المنطقة" : "Region"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => { setSelectedRegion(e.target.value); setSelectedCity(""); setSelectedStore(""); }}
+                  style={capsuleSelect}
+                >
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  {regions.map((r) => (<option key={r} value={r}>{r}</option>))}
+                </select>
+              </div>
+
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "المدينة" : "City"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+                <select
+                  value={selectedCity}
+                  onChange={(e) => { setSelectedCity(e.target.value); setSelectedStore(""); }}
+                  style={capsuleSelect}
+                >
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  {cities
+                    .filter((c) => !selectedRegion || rows.some((r) => r.market?.region === selectedRegion && r.market?.city === c))
+                    .map((c) => (<option key={c} value={c}>{c}</option>))}
+                </select>
+              </div>
+
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "السوق" : "Market"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+                <select value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)} style={capsuleSelect}>
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  {stores
+                    .filter((s) =>
+                      rows.some(
+                        (r) =>
+                          (!selectedRegion || r.market?.region === selectedRegion) &&
+                          (!selectedCity || r.market?.city === selectedCity) &&
+                          r.market?.store === s
+                      )
+                    )
+                    .map((s) => (<option key={s} value={s}>{s}</option>))}
+                </select>
+              </div>
+
+              <div style={itemShell}>
+                <span style={itemLabel}>{isAr ? "قائد الفريق" : "Team Leader"}</span>
+                <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
+                <select value={selectedTL} onChange={(e) => setSelectedTL(e.target.value)} style={capsuleSelect}>
+                  <option value="">{isAr ? "الكل" : "All"}</option>
+                  {teamLeaders.map((tl) => (<option key={tl.id} value={tl.id}>{userDisplay(tl, isAr)}</option>))}
+                </select>
+              </div>
+
+              <button onClick={fetchTable} style={{ ...primaryBtnStyle, border: "1px solid var(--divider)" }}>
+                {isAr ? "تحديث" : "Refresh"}
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedRegion(""); setSelectedCity(""); setSelectedStore("");
+                  setSelectedTL(""); setSelectedStatus(""); setSelectedJP("");
+                  fetchTable();
+                }}
+                style={{
+                  background: "var(--card)", color: "var(--text)", border: "1px solid var(--divider)",
+                  borderRadius: 10, padding: "8px 12px", fontWeight: 800, cursor: "pointer",
+                }}
+              >
+                {isAr ? "تصفير الفلاتر" : "Clear Filters"}
+              </button>
             </div>
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 16, marginBottom: 18, }}>
+
+      {/* Cards */}
+      <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
         {cards.map((c) => (
-          <div key={c.key} style={{ width: 200, background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, padding: 14, textAlign: "center", }}>
-            <div style={{ width: 110, height: 110, margin: "0 auto", display: "grid", placeItems: "center", }}>
-              {c.mode === "count" ? (<CircularProgressbar value={c.pct} text={`${c.value}`} styles={buildStyles({ textColor: "var(--text)", pathColor: "var(--accent)", trailColor: "var(--chip-bg)", })} />) : (<div style={{ fontWeight: 700, fontSize: 18, color: "var(--text)" }}>{c.value}</div>)}
+          <div key={c.key} style={{ width: 200, background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, padding: 14, textAlign: "center" }}>
+            <div style={{ width: 110, height: 110, margin: "0 auto", display: "grid", placeItems: "center" }}>
+              {c.mode === "count" ? (
+                <CircularProgressbar
+                  value={c.pct}
+                  text={`${c.value}`}
+                  styles={buildStyles({ textColor: "var(--text)", pathColor: "var(--accent)", trailColor: "var(--chip-bg)" })}
+                />
+              ) : (
+                <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text)" }}>{c.value}</div>
+              )}
             </div>
             <div style={{ marginTop: 10, fontSize: 13, color: "var(--text)" }}>{c.label}</div>
           </div>
         ))}
       </div>
+
+      {/* Table */}
       <div style={{ display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "min(1100px, 94vw)", background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, overflowX: "auto", }} className="no-scrollbar">
+        <div
+          style={{ width: "min(1100px, 94vw)", background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, overflowX: "auto" }}
+          className="no-scrollbar"
+        >
           <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -222,34 +555,59 @@ export default function YesterdayVisitsPage() {
                 <th style={thStyle}>{isAr ? "وقت الانتهاء" : "Finished at"}</th>
                 <th style={thStyle}>{isAr ? "مدة الزيارة" : "Duration"}</th>
                 <th style={thStyle}>{isAr ? "الحالة" : "Status"}</th>
+                <th style={thStyle}>{isAr ? "حالة JP" : "JP State"}</th>
                 <th style={thStyle}>{isAr ? "سبب الإنهاء" : "End Reason"}</th>
                 <th style={thStyle}>{isAr ? "الصورة" : "Photo"}</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? ( <tr><td colSpan={9} style={tdCenterMuted}>{isAr ? "تحميل…" : "Loading…"}</td></tr> ) 
-              : filteredRows.length === 0 ? ( <tr><td colSpan={9} style={tdCenterMuted}>{isAr ? "لا توجد سجلات" : "No records"}</td></tr> ) 
-              : (
+              {loading ? (
+                <tr><td colSpan={10} style={tdCenterMuted}>{isAr ? "تحميل…" : "Loading…"}</td></tr>
+              ) : filteredRows.length === 0 ? (
+                <tr><td colSpan={10} style={tdCenterMuted}>{isAr ? "لا توجد سجلات" : "No records"}</td></tr>
+              ) : (
                 filteredRows.map((r) => {
                   const durMs = rowDurationMs(r);
                   const images = parseImagePaths(r.end_visit_photo);
+                  const jp = rowJP(r);
+                  const jpStyle: React.CSSProperties = {
+                    display: "inline-block",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    background: jp === "IN JP" ? "rgba(34,197,94,0.15)" : jp === "OUT OF JP" ? "rgba(239,68,68,0.15)" : "var(--chip-bg)",
+                    border: `1px solid ${jp === "IN JP" ? "rgba(34,197,94,0.35)" : jp === "OUT OF JP" ? "rgba(239,68,68,0.35)" : "var(--divider)"}`,
+                    color: jp === "IN JP" ? "#16a34a" : jp === "OUT OF JP" ? "#ef4444" : "var(--muted)",
+                  };
 
                   return (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--divider)" }}>
                       <td style={tdStyle}>{userDisplay(r.user, isAr)}</td>
                       <td style={tdStyle}>{r.team_leader ? userDisplay(r.team_leader, isAr) : "-"}</td>
-                      <td style={tdStyle}><div style={{ lineHeight: 1.2 }}><div style={{ fontWeight: 700 }}>{r.market?.store || "-"}</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{(isAr ? "الفرع" : "Branch")}: {r.market?.branch || "-"}</div></div></td>
+                      <td style={tdStyle}>
+                        <div style={{ lineHeight: 1.2 }}>
+                          <div style={{ fontWeight: 700 }}>{r.market?.store || "-"}</div>
+                          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                            {(isAr ? "الفرع" : "Branch")}: {r.market?.branch || "-"}
+                          </div>
+                        </div>
+                      </td>
                       <td style={tdStyle}>{toKSAClock(r.started_at, isAr)}</td>
                       <td style={tdStyle}>{toKSAClock(r.finished_at, isAr)}</td>
                       <td style={tdStyle}>{durMs ? msToClock(durMs) : "-"}</td>
                       <td style={tdStyle}>{rowStatus(r)}</td>
+                      <td style={tdStyle}><span style={jpStyle}>{jp}</span></td>
                       <td style={tdStyle}>{(isAr ? r.end_reason_ar : r.end_reason_en) || r.end_reason || "-"}</td>
                       <td style={tdStyle}>
                         {images.length > 0 ? (
-                          <button onClick={() => { openViewer(images, isAr ? "صورة نهاية الزيارة" : "End of Visit Photo"); }} style={{ ...primaryBtnStyle, padding: "6px 10px", fontSize: 12 }}>
+                          <button
+                            onClick={() => openViewer(images, isAr ? "صورة نهاية الزيارة" : "End of Visit Photo")}
+                            style={{ ...primaryBtnStyle, padding: "6px 10px", fontSize: 12 }}
+                          >
                             {isAr ? `فتح (${images.length})` : `Open (${images.length})`}
                           </button>
-                        ) : ( "-" )}
+                        ) : ("-")}
                       </td>
                     </tr>
                   );
@@ -259,25 +617,63 @@ export default function YesterdayVisitsPage() {
           </table>
         </div>
       </div>
-      
+
+      {/* Lightbox */}
       {viewer.open && (
         <div onClick={closeViewer} style={modalOverlayStyle}>
           <div onClick={(e) => e.stopPropagation()} style={modalContentStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <strong style={{ fontSize: 14 }}>{viewer.title || ""}</strong>
               <button onClick={closeViewer} style={modalCloseButtonStyle}>&times;</button>
             </div>
-            <div style={{ position: 'relative', width: '100%', minWidth: 'min(500px, 80vw)', height: '70vh', backgroundColor: 'var(--input-bg)', borderRadius: 12, overflow: 'hidden' }}>
-              {viewer.imgs.length > 1 && ( <button onClick={prevImg} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', padding: '8px 12px', borderRadius: 99, border: '1px solid var(--divider)', backgroundColor: 'rgba(0,0,0,0.4)', color: 'white' }} title={isAr ? "السابق" : "Prev"}>‹</button> )}
-              <SupaImg src={viewer.imgs[viewer.index]} alt="preview" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              {viewer.imgs.length > 1 && ( <button onClick={nextImg} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', padding: '8px 12px', borderRadius: 99, border: '1px solid var(--divider)', backgroundColor: 'rgba(0,0,0,0.4)', color: 'white' }} title={isAr ? "التالي" : "Next"}>›</button> )}
+
+            <div style={{ position: "relative", width: "100%", minWidth: "min(500px, 80vw)", height: "70vh", backgroundColor: "var(--input-bg)", borderRadius: 12, overflow: "hidden" }}>
+              <img
+                key={viewer.imgs[viewer.index] + "-preloader"}
+                src={viewer.imgs[viewer.index]}
+                onLoad={() => setImgLoading(false)}
+                onError={() => setImgLoading(false)}
+                style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                alt=""
+              />
+              {imgLoading && (
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", zIndex: 1, background: "var(--input-bg)" }}>
+                  <GoldenSpinner />
+                </div>
+              )}
+              {viewer.imgs.length > 1 && (
+                <button
+                  onClick={prevImg}
+                  style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", padding: "8px 12px", borderRadius: 99, border: "1px solid var(--divider)", backgroundColor: "rgba(0,0,0,0.4)", color: "white", zIndex: 2 }}
+                  title={isAr ? "السابق" : "Prev"}
+                >‹</button>
+              )}
+              <SupaImg
+                key={viewer.imgs[viewer.index]}
+                src={viewer.imgs[viewer.index]}
+                alt="preview"
+                style={{ width: "100%", height: "100%", objectFit: "contain", opacity: imgLoading ? 0 : 1, transition: "opacity 0.2s" }}
+              />
+              {viewer.imgs.length > 1 && (
+                <button
+                  onClick={nextImg}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: "8px 12px", borderRadius: 99, border: "1px solid var(--divider)", backgroundColor: "rgba(0,0,0,0.4)", color: "white", zIndex: 2 }}
+                  title={isAr ? "التالي" : "Next"}
+                >›</button>
+              )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
               <div style={{ opacity: 0.8, fontSize: 12 }}>{viewer.index + 1} / {viewer.imgs.length}</div>
               {viewer.imgs.length > 1 && (
-                <div style={{ display: 'flex', gap: 8, overflow: 'auto', maxWidth: 'calc(100% - 50px)' }}>
+                <div style={{ display: "flex", gap: 8, overflow: "auto", maxWidth: "calc(100% - 50px)" }}>
                   {viewer.imgs.map((u, i) => (
-                    <button key={u + i} style={{ flexShrink: 0, position: 'relative', width: 48, height: 48, borderRadius: 6, border: `2px solid ${i === viewer.index ? 'var(--accent)' : 'var(--divider)'}` }} onClick={() => setViewer((v) => ({ ...v, index: i }))} title={`${i + 1}`}>
+                    <button
+                      key={u + i}
+                      style={{ flexShrink: 0, position: "relative", width: 48, height: 48, borderRadius: 6, border: `2px solid ${i === viewer.index ? "var(--accent)" : "var(--divider)"}` }}
+                      onClick={() => { setViewer((v) => ({ ...v, index: i })); setImgLoading(true); }}
+                      title={`${i + 1}`}
+                    >
                       <SupaImg src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 4 }} />
                     </button>
                   ))}

@@ -5,6 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { useLangTheme } from "@/hooks/useLangTheme";
 
+// ======================= تعديل: إضافة مكتبة التاريخ وتنسيقاتها =======================
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+// =========================================================================
+
 /* ========= Supabase ========= */
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -56,7 +61,22 @@ type VisitRequestRow = {
   market?: Market | null;
 };
 
+// ======================= تعريف خيارات الحالة =======================
+const STATUS_OPTIONS: { value: VisitRequestRow['daily_status'] | "", labelAr: string, labelEn: string }[] = [
+    { value: "", labelAr: "الكل", labelEn: "All" },
+    { value: "pending", labelAr: "معلّق", labelEn: "Pending" },
+    { value: "approved", labelAr: "موافق", labelEn: "Approved" },
+    { value: "rejected", labelAr: "مرفوض", labelAr: "Rejected" },
+    { value: "cancelled", labelAr: "ملغى", labelEn: "Cancelled" },
+];
+// =================================================================
+
 /* ========= Utils ========= */
+function ksaDate(d: Date | null) {
+  if (!d) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+}
+
 function ksaDateTime(dt?: string | null) {
   if (!dt) return "";
   const d = new Date(dt);
@@ -73,7 +93,6 @@ function ksaDateTime(dt?: string | null) {
 function diffMinSec(a?: string | null, b?: string | null) {
   if (!a || !b) return "";
   try {
-    // نحسب فرق التوقيت بتوقيت الرياض
     const getKsaMs = (iso: string) => {
       const utc = new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Riyadh" });
       return new Date(utc).getTime();
@@ -117,7 +136,7 @@ function readClientId(): string | null {
 export default function VisitRequestsPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { isArabic: isAr, isDark } = useLangTheme();
+  const { isArabic: isAr } = useLangTheme();
 
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState<StoredUser | null>(null);
@@ -132,8 +151,8 @@ export default function VisitRequestsPage() {
   const [history, setHistory] = useState<VisitRequestRow[]>([]);
 
   // date range (افتراضيًا فاضي = غير محدد)
-  const [fromDate, setFromDate] = useState<string>("");
-  const [toDate, setToDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
 
   // Filters data
   const [regions, setRegions] = useState<string[]>([]);
@@ -260,9 +279,9 @@ export default function VisitRequestsPage() {
     if (!clientId) return;
     setLoading(true);
 
-    const isYMD = (s?: string | null) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s || "");
-    const from = isYMD(fromDate) ? fromDate : null;
-    const to = isYMD(toDate) ? toDate : null;
+    // تطبيق منطق "الفترة المفتوحة"
+    const from_str = fromDate ? ksaDate(fromDate) : "1970-01-01";
+    const to_str = toDate ? ksaDate(toDate) : "2999-12-31";
 
     let q = supabase
       .from("VisitRequests")
@@ -274,8 +293,9 @@ export default function VisitRequestsPage() {
       .in("daily_status", ["approved", "rejected", "cancelled"])
       .order("requested_at", { ascending: false });
 
-    if (from) q = q.gte("log_date", from);
-    if (to) q = q.lte("log_date", to);
+    // استخدام النطاق الواسع بدلاً من التحقق من الـ null
+    q = q.gte("log_date", from_str);
+    q = q.lte("log_date", to_str);
 
     const { data: rows, error } = await q;
     if (error) {
@@ -292,8 +312,8 @@ export default function VisitRequestsPage() {
     }
 
     const requesterIds = Array.from(new Set(base.map(r => r.user_id).filter(Boolean))) as string[];
-    const approverIds  = Array.from(new Set(base.map(r => r.approved_by).filter(Boolean))) as string[];
-    const marketIds    = Array.from(new Set(base.map(r => r.market_id).filter(Boolean))) as string[];
+    const approverIds  = Array.from(new Set(base.map(r => r.approved_by).filter(Boolean))) as string[];
+    const marketIds    = Array.from(new Set(base.map(r => r.market_id).filter(Boolean))) as string[];
 
     const [{ data: reqUsers }, { data: appUsers }, { data: mkts }] = await Promise.all([
       requesterIds.length
@@ -385,19 +405,34 @@ export default function VisitRequestsPage() {
     setSelectedStore("");
     setSelectedStatus("");
     setSelectedTL("");
-    setFromDate("");
-    setToDate("");
+    setFromDate(null);
+    setToDate(null);
     if (tab === "history") fetchHistory(); else fetchPending();
   }, [fetchHistory, fetchPending, tab]);
+
+  const handleDateFromChange = (date: Date | null) => {
+    setFromDate(date);
+    if (toDate && date && date > toDate) {
+      setToDate(null);
+    }
+  };
+  
+  const handleDateToChange = (date: Date | null) => {
+    if (fromDate && date && date < fromDate) {
+      return; 
+    }
+    setToDate(date);
+  };
+
 
   /* ==== filter lists ==== */
   const filteredPending = useMemo(() => {
     return pending.filter(r => {
       const okRegion = selectedRegion ? r.market?.region === selectedRegion : true;
-      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
-      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
+      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
+      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
       const okStatus = selectedStatus ? r.daily_status === selectedStatus : true;
-      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
+      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
       return okRegion && okCity && okStore && okStatus && okTL;
     });
   }, [pending, selectedRegion, selectedCity, selectedStore, selectedStatus, selectedTL]);
@@ -405,10 +440,10 @@ export default function VisitRequestsPage() {
   const filteredHistory = useMemo(() => {
     return history.filter(r => {
       const okRegion = selectedRegion ? r.market?.region === selectedRegion : true;
-      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
-      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
+      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
+      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
       const okStatus = selectedStatus ? r.daily_status === selectedStatus : true;
-      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
+      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
       return okRegion && okCity && okStore && okStatus && okTL;
     });
   }, [history, selectedRegion, selectedCity, selectedStore, selectedStatus, selectedTL]);
@@ -464,99 +499,99 @@ const DASH_HOME = process.env.NEXT_PUBLIC_DASH_HOME || "/admin/dashboard";
             {/* Region */}
             <Chip>
               <ChipLabel>{isAr ? "المنطقة" : "Region"}</ChipLabel>
-              <ChipSelect
+              <DarkSelect
                 value={selectedRegion}
-                onChange={(e) => { setSelectedRegion(e.target.value); setSelectedCity(""); }}
+                onValueChange={(v) => { setSelectedRegion(v); setSelectedCity(""); }}
                 selected={!!selectedRegion}
-                options={["", ...regions]}
-                isDark={isDark}
+                options={regions}
+                disabled={!regions.length}
+                isAr={isAr}
               />
             </Chip>
 
             {/* City */}
             <Chip>
               <ChipLabel>{isAr ? "المدينة" : "City"}</ChipLabel>
-              <ChipSelect
+              <DarkSelect
                 value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
+                onValueChange={(v) => setSelectedCity(v)}
                 selected={!!selectedCity}
+                options={cities}
                 disabled={!regions.length}
-                options={["", ...cities]}
-                isDark={isDark}
+                isAr={isAr}
               />
             </Chip>
 
             {/* Store */}
             <Chip>
               <ChipLabel>{isAr ? "السوق" : "Store"}</ChipLabel>
-              <ChipSelect
+              <DarkSelect
                 value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
+                onValueChange={setSelectedStore}
                 selected={!!selectedStore}
-                options={["", ...stores]}
-                isDark={isDark}
+                options={stores}
+                disabled={!stores.length}
+                isAr={isAr}
               />
             </Chip>
 
             {/* Status */}
             <Chip>
               <ChipLabel>{isAr ? "الحالة" : "Status"}</ChipLabel>
-              <select
+              <DarkSelect
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus((e.target.value || "") as typeof selectedStatus)}
-                style={selectStyle(!!selectedStatus, isDark)}
-              >
-                <option value="">{isAr ? "الكل" : "All"}</option>
-                <option value="pending">{isAr ? "معلّق" : "Pending"}</option>
-                <option value="approved">{isAr ? "موافق" : "Approved"}</option>
-                <option value="rejected">{isAr ? "مرفوض" : "Rejected"}</option>
-                <option value="cancelled">{isAr ? "ملغى" : "Cancelled"}</option>
-              </select>
+                onValueChange={(v) => setSelectedStatus((v || "") as typeof selectedStatus)}
+                selected={!!selectedStatus}
+                options={STATUS_OPTIONS.map(o => o.value).filter(Boolean)}
+                isAr={isAr}
+                getLabel={(v) => {
+                    const option = STATUS_OPTIONS.find(o => o.value === v);
+                    return isAr ? option?.labelAr : option?.labelEn;
+                }}
+              />
             </Chip>
 
             {/* Team Leader */}
             <Chip>
               <ChipLabel>{isAr ? "التيم ليدر" : "Team Leader"}</ChipLabel>
-              <select
+              <DarkSelect
                 value={selectedTL}
-                onChange={(e) => setSelectedTL(e.target.value)}
-                style={selectStyle(!!selectedTL, isDark)}
-              >
-                <option value="">{isAr ? "الكل" : "All"}</option>
-                {teamLeaders.map(tl => (
-                  <option key={tl.id} value={tl.id}>{userDisplay(tl, isAr)}</option>
-                ))}
-              </select>
+                onValueChange={setSelectedTL}
+                selected={!!selectedTL}
+                options={teamLeaders.map(tl => tl.id)}
+                isAr={isAr}
+                getLabel={(id) => {
+                    const tl = teamLeaders.find(u => u.id === id);
+                    return userDisplay(tl, isAr);
+                }}
+              />
             </Chip>
 
             {/* From */}
             <Chip>
               <ChipLabel>{isAr ? "من" : "From"}</ChipLabel>
-              <DateInput
-                value={fromDate}
-                onChange={(v) => {
-                  setFromDate(v);
-                  if (toDate && v && new Date(toDate) < new Date(v)) setToDate("");
-                }}
-                placeholder={isAr ? "اختر التاريخ" : "Pick date"}
-                max={toDate || undefined}
+              <DatePicker
+                  selected={fromDate}
+                  onChange={handleDateFromChange}
+                  selectsStart
+                  endDate={toDate}
+                  dateFormat="yyyy/MM/dd"
+                  placeholderText={isAr ? "اختر التاريخ" : "Pick date"}
+                  className="date-picker-input"
               />
             </Chip>
 
             {/* To */}
             <Chip>
               <ChipLabel>{isAr ? "إلى" : "To"}</ChipLabel>
-              <DateInput
-                value={toDate}
-                onChange={(v) => {
-                  if (fromDate && v && new Date(v) < new Date(fromDate)) {
-                    alert(isAr ? "تاريخ (إلى) لا يمكن أن يكون قبل (من)" : "End date cannot be before start date");
-                    return;
-                  }
-                  setToDate(v);
-                }}
-                placeholder={isAr ? "اختر التاريخ" : "Pick date"}
-                min={fromDate || undefined}
+              <DatePicker
+                  selected={toDate}
+                  onChange={handleDateToChange}
+                  selectsEnd
+                  minDate={fromDate}
+                  dateFormat="yyyy/MM/dd"
+                  placeholderText={isAr ? "اختر التاريخ" : "Pick date"}
+                  className="date-picker-input"
               />
             </Chip>
 
@@ -628,12 +663,16 @@ const DASH_HOME = process.env.NEXT_PUBLIC_DASH_HOME || "/admin/dashboard";
                       <td>{ksaDateTime(r.requested_at)}</td>
                       <td>
                         <div style={{ display: "inline-flex", gap: 10, flexWrap: "wrap" }}>
+                          {/* ======================= تعديل: شكل زر القبول (احترافي) ======================= */}
                           <button onClick={() => onApprove(r)} style={approveBtn} title={isAr ? "قبول الزيارة" : "Approve"}>
-                            <span>✔</span> <span>{isAr ? "قبول" : "Approve"}</span>
+                            <span style={{ fontSize: 14 }}>✔</span> <span>{isAr ? "قبول" : "Approve"}</span>
                           </button>
+                          {/* ===================================================================== */}
+                          {/* ======================= تعديل: شكل زر الرفض (احترافي) ======================= */}
                           <button onClick={() => onReject(r)} style={rejectBtn} title={isAr ? "رفض الزيارة" : "Reject"}>
-                            <span>✖</span> <span>{isAr ? "رفض" : "Reject"}</span>
+                            <span style={{ fontSize: 14 }}>✖</span> <span>{isAr ? "رفض" : "Reject"}</span>
                           </button>
+                          {/* =================================================================== */}
                         </div>
                       </td>
                     </tr>
@@ -696,25 +735,60 @@ const DASH_HOME = process.env.NEXT_PUBLIC_DASH_HOME || "/admin/dashboard";
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 1) تأكيد أن عناصر القوائم المنسدلة نصّها أسود */
-        select option { color: #000 !important; }
-
-        /* خلفية العناصر داخل القائمة (فاتح/غامق) */
-        html[data-theme="dark"] select option { background: #1b1b1b; }
-        html[data-theme="light"] select option { background: #fff; }
-
-        /* placeholder بديل لحقل التاريخ */
-        .date-chip { position: relative; }
-        .date-chip input::-webkit-calendar-picker-indicator { opacity: 0.8; }
-        .date-chip .placeholder {
-          position: absolute;
-          inset-inline-start: 10px;
-          top: 6px;
-          font-size: 13px;
-          color: var(--muted);
-          pointer-events: none;
-          user-select: none;
+        /* ============================================== */
+        /* === تنسيقات DatePicker الموحدة (من Dashboard) === */
+        /* ============================================== */
+        .date-picker-input {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+            padding: 6px 28px 6px 10px;
+            min-width: 160px;
+            cursor: pointer;
+            appearance: none;
+            border-radius: 8px;
+            text-align: inherit;
         }
+        .date-picker-input::placeholder {
+            color: var(--muted);
+        }
+        .react-datepicker-popper { z-index: 55; }
+        .react-datepicker { border: 1px solid var(--divider); background: var(--card); }
+        .react-datepicker__header { background-color: var(--card) !important; border-bottom: 1px solid var(--divider); }
+        .react-datepicker__current-month, .react-datepicker__day-name, .react-datepicker__day { color: var(--text) !important; }
+        .react-datepicker__day--selected, .react-datepicker__day--in-selecting-range, .react-datepicker__day--in-range { background-color: var(--accent) !important; color: var(--accent-foreground) !important; border-radius: 0.3rem; }
+        .react-datepicker__day--keyboard-selected { background-color: var(--accent) !important; color: var(--accent-foreground) !important; }
+        .react-datepicker__day:hover { background-color: rgba(255,255,255,0.1) !important; }
+        .react-datepicker__day--disabled { opacity: 0.4; }
+        /* ============================================== */
+        /* === تنسيقات Dark Select / Selects العامة === */
+        /* ============================================== */
+
+        .dark-select-scroll {
+             -ms-overflow-style: none;
+             scrollbar-width: none;
+        }
+        .dark-select-scroll::-webkit-scrollbar { display: none; }
+
+         .dark-select-pop {
+            background: var(--card) !important; 
+            border: 1px solid var(--divider) !important;
+            box-shadow: 0 16px 40px rgba(0,0,0,.6) !important;
+        }
+        .dark-select-pop li { color: var(--text) !important; }
+        .dark-select-pop li[aria-selected="true"] { 
+            background: color-mix(in oklab, var(--accent) 30%, transparent) !important;
+            color: var(--accent-foreground) !important;
+        }
+        .dark-select-pop li:hover { background: rgba(255, 255, 255, 0.08) !important; }
+        .dark-select-pop li[aria-selected="true"]:hover {
+            background: color-mix(in oklab, var(--accent) 40%, transparent) !important;
+        }
+
+        select option { color: #000 !important; background: #fff !important; }
+        select option:nth-child(even) { background: #f0f0f0 !important; }
       `}</style>
     </div>
   );
@@ -739,55 +813,18 @@ function Chip({ children }: { children: React.ReactNode }) {
 function ChipLabel({ children }: { children: React.ReactNode }) {
   return <span style={{ fontSize: 12, color: "var(--muted)" }}>{children}</span>;
 }
-function ChipSelect({
-  value,
-  onChange,
-  selected,
-  options,
-  disabled,
-  isDark,
-}: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  selected: boolean;
-  options: string[];
-  disabled?: boolean;
-  isDark: boolean;
-}) {
-  // في الفاتح أو لو Disabled استخدم الـnative select
-  if (!isDark || disabled) {
-    return (
-      <select
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        style={selectStyle(selected, false)}
-        className="light-dropdown"
-      >
-        <option value="">{/* All */}الكل</option>
-        {options.filter(Boolean).map(v => (
-          <option key={v} value={v}>{v}</option>
-        ))}
-      </select>
-    );
-  }
-
-  // في الداكن: منيو مخصّصة
-  return <DarkSelect value={value} onValueChange={(val) => {
-    const evt = { target: { value: val } } as unknown as React.ChangeEvent<HTMLSelectElement>;
-    onChange(evt);
-  }} selected={selected} options={options} disabled={!!disabled} />;
-}
 
 /* ====== Dark custom select (fully stylable) ====== */
 function DarkSelect({
-  value, onValueChange, selected, options, disabled,
+  value, onValueChange, selected, options, disabled, isAr, getLabel,
 }: {
   value: string;
   onValueChange: (v: string) => void;
   selected: boolean;
   options: string[];
-  disabled: boolean;
+  disabled?: boolean;
+  isAr: boolean;
+  getLabel?: (v: string) => string | null | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [hoverIdx, setHoverIdx] = useState<number>(() => {
@@ -804,10 +841,15 @@ function DarkSelect({
   }, []);
 
   const items = useMemo(() => ["", ...options.filter(Boolean)], [options]);
-  const label = (v: string) => (v === "" ? "الكل" : v);
+  
+  // دالة عرض النص: تستخدم getLabel الممررة أو القيمة الأصلية كإجراء احتياطي
+  const displayLabel = (v: string) => {
+    if (v === "") return isAr ? "الكل" : "All";
+    return getLabel ? getLabel(v) || v : v;
+  };
 
   return (
-    <div className="dark-select-wrap dark-select-reset dark-select-elev dark-select-scroll" style={{ position: "relative" }}>
+    <div className="dark-select-wrap dark-select-scroll" style={{ position: "relative" }}>
       <button
         type="button"
         className="dark-select-trigger"
@@ -817,7 +859,7 @@ function DarkSelect({
         disabled={disabled}
         style={{
           background: selected ? "rgba(245,166,35,0.18)" : "transparent",
-          color: "#fff",
+          color: "var(--text)",
           border: "none",
           outline: "none",
           fontSize: 13,
@@ -825,9 +867,10 @@ function DarkSelect({
           padding: "6px 28px 6px 10px",
           minWidth: 160,
           cursor: disabled ? "not-allowed" : "pointer",
+          textAlign: isAr ? 'right' : 'left',
         }}
       >
-        {label(value)}
+        {displayLabel(value)}
         <span style={{ position: "absolute", insetInlineEnd: 8, top: 6, opacity: .8 }}>▾</span>
       </button>
 
@@ -835,7 +878,7 @@ function DarkSelect({
         <ul
           role="listbox"
           tabIndex={-1}
-          className="dark-select-pop"
+          className="dark-select-pop dark-select-scroll"
           style={{
             position: "absolute",
             zIndex: 50,
@@ -844,11 +887,13 @@ function DarkSelect({
             minWidth: 180,
             maxHeight: 260,
             overflowY: "auto",
-            background: "#101114",
-            border: "1px solid #3a3d44",
+            transform: isAr ? 'translateX(calc(-100% + 160px))' : 'none', 
+            background: "var(--card)",
+            border: "1px solid var(--divider)",
             borderRadius: 10,
             boxShadow: "0 16px 40px rgba(0,0,0,.45)",
             padding: 6,
+            direction: isAr ? 'rtl' : 'ltr',
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") setOpen(false);
@@ -874,17 +919,18 @@ function DarkSelect({
                 style={{
                   padding: "8px 10px",
                   borderRadius: 8,
-                  color: "#fff",
+                  color: "var(--text)",
                   background: active
-                    ? "rgba(245,166,35,.28)"
+                    ? "rgba(245,166,35,0.28)"
                     : hovered
                     ? "rgba(255,255,255,.06)"
                     : "transparent",
                   cursor: "pointer",
                   fontSize: 13,
+                  textAlign: isAr ? 'right' : 'left',
                 }}
               >
-                {label(opt)}
+                {displayLabel(opt)}
               </li>
             );
           })}
@@ -893,49 +939,6 @@ function DarkSelect({
     </div>
   );
 }
-
-
-function DateInput({
-  value,
-  onChange,
-  placeholder,
-  min,
-  max,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  min?: string;
-  max?: string;
-}) {
-  return (
-    <div className="date-chip" style={{ position: "relative" }}>
-      <input
-        type="date"
-        value={value}
-        min={min}
-        max={max}
-        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            (e.currentTarget as HTMLInputElement).showPicker?.();
-            e.preventDefault();
-          }
-          // منع كتابة يدويًا باستثناء Tab
-          if (e.key !== "Tab") e.preventDefault();
-        }}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ ...dateChipInput, paddingRight: 10 }}
-      />
-      {!value && (
-        <span className="placeholder">
-          {placeholder || "Pick date"}
-        </span>
-      )}
-    </div>
-  );
-}
-
 
 
 /* ========= styles ========= */
@@ -985,38 +988,25 @@ const actionBtnBase: React.CSSProperties = {
   borderStyle: "solid",
   transition: "transform .06s ease, box-shadow .15s ease, background .15s ease",
 };
+
+// ======================= تعديل: تصميم زر القبول (احترافي) =======================
 const approveBtn: React.CSSProperties = {
   ...actionBtnBase,
-  background: "rgba(0, 160, 60, 0.12)",
-  borderColor: "rgba(0, 160, 60, 0.45)",
-  boxShadow: "inset 0 0 0 1px rgba(0, 160, 60, 0.15)",
+  background: "color-mix(in oklab, #00A03C 15%, transparent)", // أخضر خفيف
+  borderColor: "#00A03C", // أخضر غامق
+  color: "#00A03C", // نص أخضر
+  padding: "6px 10px", // تصغير الحجم
+  fontSize: 13,
 };
+// ===============================================================================
+
+// ======================= تعديل: تصميم زر الرفض (احترافي) =======================
 const rejectBtn: React.CSSProperties = {
   ...actionBtnBase,
-  background: "rgba(200, 40, 40, 0.12)",
-  borderColor: "rgba(200, 40, 40, 0.45)",
-  boxShadow: "inset 0 0 0 1px rgba(200, 40, 40, 0.15)",
-};
-const dateChipInput: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "var(--text)",
+  background: "color-mix(in oklab, #DC143C 15%, transparent)", // أحمر خفيف
+  borderColor: "#DC143C", // أحمر غامق
+  color: "#DC143C", // نص أحمر
+  padding: "6px 10px", // تصغير الحجم
   fontSize: 13,
-  outline: "none",
-  padding: "6px 28px 6px 10px",
-  minWidth: 160,
-  cursor: "pointer",
-  appearance: "none",
-  borderRadius: 8,
 };
-const selectStyle = (selected: boolean, isDark: boolean): React.CSSProperties => ({
-  background: selected ? "rgba(245,166,35,0.18)" : "transparent",
-  color: selected ? (isDark ? "#fff" : "#000") : "var(--text)",
-  border: "none",
-  outline: "none",
-  fontSize: 13,
-  borderRadius: 8,
-  padding: "4px 8px",
-  cursor: "pointer",
-  appearance: "none",
-});
+// ===============================================================================

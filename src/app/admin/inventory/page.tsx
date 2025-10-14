@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
+// ======================= تعديل: تم حذف useRef غير المستخدم =======================
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "@/utils/supabaseClient";
 import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
+
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 /* ========= Types ========= */
 type UUID = string;
@@ -126,69 +130,6 @@ function btn(h?: number, selected = false): React.CSSProperties {
   };
 }
 
-function DateField({
-  value,
-  onChange,
-  label,
-  locale = "en-GB",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  locale?: string;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const pretty = useMemo(() => {
-    if (!value) return "—";
-    const d = new Date(value + "T00:00:00");
-    if (Number.isNaN(+d)) return value;
-    return d.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
-  }, [value, locale]);
-
-  const openPicker = () => {
-    try {
-      inputRef.current?.showPicker();
-    } catch {
-      inputRef.current?.click();
-    }
-  };
-
-  return (
-    <div>
-      <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 6 }}>{label}</label>
-      <div
-        role="button"
-        onClick={openPicker}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "10px 12px",
-          borderRadius: 12,
-          border: "1px solid var(--input-border)",
-          background: "var(--card)",
-          cursor: "pointer",
-          height: 46,
-        }}
-      >
-        <span style={{ fontWeight: 700 }}>{pretty}</span>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M16 3v4M8 3v4M3 10h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      </div>
-      <input
-        ref={inputRef}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
-      />
-    </div>
-  );
-}
-
 /* ========= Golden Spinner ========= */
 function GoldenSpinner({ size = 72, thickness = 6 }: { size?: number; thickness?: number }) {
   const accent = "var(--accent, #F5A623)";
@@ -230,8 +171,8 @@ export default function InventoryReportPage() {
   const [allClientMarkets, setAllClientMarkets] = useState<MarketRow[]>([]);
   const [reports, setReports] = useState<InventoryReport[]>([]);
 
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
   const [selectedTL, setSelectedTL] = useState<UUID | "ALL">("ALL");
   const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedStore, setSelectedStore] = useState("");
@@ -280,8 +221,6 @@ export default function InventoryReportPage() {
     (async () => {
       try {
         setLoading(true);
-
-        // Users via join alias + returns typing
         const { data: usersData } = await supabase
           .from("client_users")
           .select("Users:Users!inner(id,name,arabic_name,role,team_leader_id)")
@@ -295,8 +234,6 @@ export default function InventoryReportPage() {
             .map((r) => r.Users)
             .filter((u): u is UserRow => Boolean(u))
         );
-
-        // Markets via join alias + returns typing
         const { data: marketsData } = await supabase
           .from("client_markets")
           .select("Markets:Markets!inner(id,store,branch,region,city)")
@@ -315,7 +252,7 @@ export default function InventoryReportPage() {
     })();
   }, [clientId]);
 
-  /* Load all reports for that client (نفس السكيما) */
+  /* Load all reports for that client */
   useEffect(() => {
     if (!clientId) return;
     (async () => {
@@ -325,10 +262,10 @@ export default function InventoryReportPage() {
           .from("InventoryReports")
           .select(
             `*,
-             user:Users(*),
-             product:Products(*),
-             reason:reasons(reason_en,reason_ar),
-             market:Markets(*)`
+              user:Users(*),
+              product:Products(*),
+              reason:reasons(reason_en,reason_ar),
+              market:Markets(*)`
           )
           .eq("client_id", clientId);
         if (!error) setReports((data ?? []) as InventoryReport[]);
@@ -339,14 +276,21 @@ export default function InventoryReportPage() {
   }, [clientId]);
 
   const resetFilters = () => {
-    setDateFrom("");
-    setDateTo("");
+    setDateFrom(null);
+    setDateTo(null);
     setSelectedTL("ALL");
     setSelectedRegion("");
     setSelectedStore("");
     setSelectedUsers([]);
     setSelectedMarketStore(null);
     setSelectedBranchId(null);
+  };
+  
+  const handleDateFromChange = (date: Date | null) => {
+    setDateFrom(date);
+    if (dateTo && date && date > dateTo) {
+      setDateTo(null);
+    }
   };
 
   /* Derived options */
@@ -373,9 +317,17 @@ export default function InventoryReportPage() {
   /* Top filters for the grid table */
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
-      const d = new Date(r.created_at);
-      const fromOk = !dateFrom || d >= new Date(dateFrom);
-      const toOk = !dateTo || d <= new Date(dateTo + "T23:59:59");
+      const reportDate = new Date(r.created_at);
+      
+      const fromOk = !dateFrom || reportDate >= dateFrom;
+      
+      let toOk = true;
+      if (dateTo) {
+        const toDateEnd = new Date(dateTo);
+        toDateEnd.setHours(23, 59, 59, 999);
+        toOk = reportDate <= toDateEnd;
+      }
+      
       const regionOk = !selectedRegion || r.market?.region === selectedRegion;
       const storeOk = !selectedStore || r.market?.store === selectedStore;
       return fromOk && toOk && regionOk && storeOk;
@@ -453,6 +405,37 @@ export default function InventoryReportPage() {
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: 16 }}>
+      <style jsx global>{`
+        .react-datepicker-wrapper input {
+          width: 100%;
+          height: 46px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid var(--input-border);
+          background: var(--card);
+          color: var(--text);
+          font-weight: 700;
+        }
+        .react-datepicker-wrapper input::placeholder {
+          color: var(--muted);
+          font-weight: 500;
+        }
+        .react-datepicker__header {
+          background-color: var(--card) !important;
+        }
+        .react-datepicker__month-container {
+            background-color: var(--card);
+            border: 1px solid var(--divider);
+        }
+        .react-datepicker__current-month, .react-datepicker-time__header, .react-datepicker-year-header,
+        .react-datepicker__day-name, .react-datepicker__day, .react-datepicker__time-name {
+            color: var(--text) !important;
+        }
+        .react-datepicker__day--disabled {
+            opacity: 0.3;
+        }
+      `}</style>
+      
       {loading && (
         <div
           style={{
@@ -480,118 +463,142 @@ export default function InventoryReportPage() {
       </h1>
 
       {/* Filters bar */}
-      <div
+<div
+  className="date-picker-container"
+  style={{
+    position: "sticky",
+    top: 8,
+    zIndex: 20,
+    marginBottom: 16,
+    padding: 10,
+    borderRadius: 16,
+    border: cardBorder,
+    background: "color-mix(in oklab, var(--card) 82%, transparent)",
+    backdropFilter: "blur(8px)",
+  }}
+>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+      gap: 10,
+      alignItems: "end",
+    }}
+  >
+    <div>
+        <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 6 }}>{ar ? "من تاريخ" : "From"}</label>
+        <DatePicker
+            selected={dateFrom}
+            onChange={handleDateFromChange}
+            selectsStart
+            startDate={dateFrom}
+            endDate={dateTo}
+            dateFormat="yyyy-MM-dd"
+            placeholderText={ar ? "اختر تاريخ البداية" : "Select start date"}
+        />
+    </div>
+    <div>
+        <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 6 }}>{ar ? "إلى تاريخ" : "To"}</label>
+        <DatePicker
+            selected={dateTo}
+            onChange={(date) => setDateTo(date)}
+            selectsEnd
+            startDate={dateFrom}
+            endDate={dateTo}
+            minDate={dateFrom}
+            dateFormat="yyyy-MM-dd"
+            placeholderText={ar ? "اختر تاريخ النهاية" : "Select end date"}
+        />
+    </div>
+
+    <div>
+      <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "قائد الفريق" : "Team Leader"}</label>
+      <select
+        onChange={(e) => setSelectedTL(e.target.value as UUID | "ALL")}
+        value={selectedTL || ""}
         style={{
-          position: "sticky",
-          top: 8,
-          zIndex: 20,
-          marginBottom: 16,
-          padding: 10,
-          borderRadius: 16,
-          border: cardBorder,
-          background: "color-mix(in oklab, var(--card) 82%, transparent)",
-          backdropFilter: "blur(8px)",
+          width: "100%",
+          height: 46,
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: "1px solid var(--input-border)",
+          background: "var(--card)",
+          color: "var(--text)",
         }}
       >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 10,
-            alignItems: "end",
-          }}
-        >
-          <DateField label={ar ? "من تاريخ" : "From"} value={dateFrom} onChange={setDateFrom} />
-          <DateField label={ar ? "إلى تاريخ" : "To"} value={dateTo} onChange={setDateTo} />
+        <option value="ALL">{ar ? "كل الفرق" : "All Teams"}</option>
+        {teamLeaders.map((tl) => (
+          <option key={tl.id} value={tl.id}>
+            {ar ? tl.arabic_name || tl.name : tl.name || tl.arabic_name}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "قائد الفريق" : "Team Leader"}</label>
-            <select
-              onChange={(e) => setSelectedTL(e.target.value as UUID | "ALL")}
-              value={selectedTL || ""}
-              style={{
-                width: "100%",
-                height: 46,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid var(--input-border)",
-                background: "var(--card)",
-                color: "var(--text)",
-              }}
-            >
-              <option value="ALL">{ar ? "كل الفرق" : "All Teams"}</option>
-              {teamLeaders.map((tl) => (
-                <option key={tl.id} value={tl.id}>
-                  {ar ? tl.arabic_name || tl.name : tl.name || tl.arabic_name}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div>
+      <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "المنطقة" : "Region"}</label>
+      <select
+        onChange={(e) => setSelectedRegion(e.target.value)}
+        value={selectedRegion}
+        style={{
+          width: "100%",
+          height: 46,
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: "1px solid var(--input-border)",
+          background: "var(--card)",
+          color: "var(--text)",
+        }}
+      >
+        <option value="">{ar ? "الكل" : "All"}</option>
+        {regionOptions.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "المنطقة" : "Region"}</label>
-            <select
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              value={selectedRegion}
-              style={{
-                width: "100%",
-                height: 46,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid var(--input-border)",
-                background: "var(--card)",
-                color: "var(--text)",
-              }}
-            >
-              <option value="">{ar ? "الكل" : "All"}</option>
-              {regionOptions.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div>
+      <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "السوق" : "Store"}</label>
+      <select
+        onChange={(e) => setSelectedStore(e.target.value)}
+        value={selectedStore}
+        style={{
+          width: "100%",
+          height: 46,
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: "1px solid var(--input-border)",
+          background: "var(--card)",
+          color: "var(--text)",
+        }}
+      >
+        <option value="">{ar ? "الكل" : "All"}</option>
+        {storeOptions.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label style={{ fontSize: 12, color: "var(--muted)" }}>{ar ? "السوق" : "Store"}</label>
-            <select
-              onChange={(e) => setSelectedStore(e.target.value)}
-              value={selectedStore}
-              style={{
-                width: "100%",
-                height: 46,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid var(--input-border)",
-                background: "var(--card)",
-                color: "var(--text)",
-              }}
-            >
-              <option value="">{ar ? "الكل" : "All"}</option>
-              {storeOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={resetFilters}
-            style={{
-              height: 46,
-              fontWeight: 700,
-              border: "1px solid var(--divider)",
-              borderRadius: 12,
-              background: "var(--card)",
-              color: "var(--text)",
-              cursor: "pointer",
-            }}
-          >
-            {ar ? "إعادة تعيين" : "Reset"}
-          </button>
-        </div>
-      </div>
+    <button
+      onClick={resetFilters}
+      style={{
+        height: 46,
+        fontWeight: 700,
+        border: "1px solid var(--divider)",
+        borderRadius: 12,
+        background: "var(--card)",
+        color: "var(--text)",
+        cursor: "pointer",
+      }}
+    >
+      {ar ? "إعادة تعيين" : "Reset"}
+    </button>
+  </div>
+</div>
 
       {/* Panels */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -844,24 +851,22 @@ export default function InventoryReportPage() {
     </div>
   )}
 
-  {/* العرض الرئيسي باستخدام SupaImg */}
   <SupaImg
-    key={lightboxImages[lightboxIndex]}               // مهم لإجبار إعادة التركيب عند تغيير الصورة
+    key={lightboxImages[lightboxIndex]}
     src={lightboxImages[lightboxIndex]}
     alt="Inventory"
-    onLoadingComplete={() => setImgLoading(false)}    // لو SupaImg يمررها لـ next/image
+    onLoadingComplete={() => setImgLoading(false)}
     onError={() => setImgLoading(false)}
     priority
     style={{
       maxWidth: "90%",
       maxHeight: "90%",
       objectFit: "contain",
-      opacity: imgLoading ? 0 : 1,                    // نحافظ على الـlayout ونظهر Fade
+      opacity: imgLoading ? 0 : 1,
       transition: "opacity .2s ease",
     }}
   />
 
-  {/* preloader مخفي يضمن firing لحدث onLoad حتى لو SupaImg ما يمرّرش الأحداث */}
   <img
     key={"preload-" + lightboxImages[lightboxIndex]}
     src={lightboxImages[lightboxIndex]}
@@ -873,7 +878,6 @@ export default function InventoryReportPage() {
     style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
   />
 
-          {/* إغلاق */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -899,7 +903,6 @@ export default function InventoryReportPage() {
             &times;
           </button>
 
-          {/* تنقّل + عدّاد */}
           {lightboxImages.length > 1 && (
             <>
               <button

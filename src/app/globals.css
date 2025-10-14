@@ -456,3 +456,7 @@ option {
   background-color: white;
   color: black;
 }
+/* Fix for RTL filter bar alignment */
+[dir="rtl"] .date-picker-container > div {
+  justify-content: flex-end;
+}

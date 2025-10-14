@@ -8,6 +8,9 @@ import { CircularProgressbar, CircularProgressbarWithChildren, buildStyles } fro
 import "react-circular-progressbar/dist/styles.css";
 import { useLangTheme } from "@/hooks/useLangTheme";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
 /* ========= Supabase client ========= */
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -31,11 +34,9 @@ type ClientRow = {
   logo_url?: string | null;
 };
 
-type TLUser = { id: string; username: string };
+type TLUser = { id: string; username: string; arabic_name?: string | null };
 
-// 👇 مهم: في Markets الحقول region / city / store
 type MarketRow = { id?: string; region?: string | null; city?: string | null; store?: string | null };
-type UserRow = { id?: string; username?: string; role?: string };
 
 /* ========= Helpers ========= */
 const LS_KEYS = {
@@ -124,8 +125,6 @@ async function fetchAllRows<T extends Record<string, unknown>>(
 
   while (true) {
     let q = supabase.from(table).select(selectExp);
-
-    // طبّق الفلاتر
     for (const k in filters) {
       q = q.eq(k, filters[k]);
     }
@@ -166,7 +165,6 @@ function ksaDate(d = new Date()) {
 export default function AdminDashboardPage() {
   const router = useRouter();
 
-  /* IDs للاستخدام المتكرر */
   const [clientId, setClientId] = useState<string | null>(null);
 
   /* ========= App state ========= */
@@ -177,50 +175,30 @@ export default function AdminDashboardPage() {
   const [totalProducts, setTotalProducts] = useState<number>(0);
   const [totalAvailable, setTotalAvailable] = useState<number>(0);
   const [totalUnavailable, setTotalUnavailable] = useState<number>(0);
-  // ── Visit cards (Totals) ─────────────────────────
+
   const [totalVisits, setTotalVisits] = useState(0);
   const [finishedVisits, setFinishedVisits] = useState(0);
   const [unfinishedVisits, setUnfinishedVisits] = useState(0);
   const [finishedPct, setFinishedPct] = useState(0);
   const [unfinishedPct, setUnfinishedPct] = useState(0);
 
-  // الاتجاه (اللغة بتتظبط من الهيدر العالمي)
   const { isArabic: isAr } = useLangTheme();
 
-  // التاريخ
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  // ضبّط نطاق افتراضي آخر 5 سنين بمجرد معرفة العميل
-  useEffect(() => {
-    if (!clientId) return;
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
 
-    const to = ksaDate();
-    const fromDate = new Date();
-    fromDate.setFullYear(fromDate.getFullYear() - 5);
-    const from = ksaDate(fromDate);
-
-    setDateFrom((prev) => prev || from);
-    setDateTo((prev) => prev || to);
-  }, [clientId]);
-
-  // أسواق العميل
   const [allMarkets, setAllMarkets] = useState<MarketRow[]>([]);
-
-  // Team leaders
   const [teamLeaders, setTeamLeaders] = useState<TLUser[]>([]);
 
-  // القيم المختارة
   const [selectedRegion, setSelectedRegion] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [selectedMarketName, setSelectedMarketName] = useState<string>("");
-  const [selectedTeamLeader, setSelectedTeamLeader] = useState<string>(""); // user_id
+  const [selectedTeamLeader, setSelectedTeamLeader] = useState<string>("");
 
-  // Presence/Visit/Transit seconds
   const [presenceSeconds, setPresenceSeconds] = useState<number>(0);
   const [visitSeconds, setVisitSeconds] = useState<number>(0);
   const [transitSeconds, setTransitSeconds] = useState<number>(0);
 
-  // بيانات العميل/الهيدر
   const [client, setClient] = useState<ClientRow | null>(null);
   const [headerInfo, setHeaderInfo] = useState<{
     user_name_en?: string;
@@ -230,10 +208,17 @@ export default function AdminDashboardPage() {
     client_logo_filename?: string;
   } | null>(null);
 
-  // Loading indicators (فقط للفلاتر)
   const [loadingFilters, setLoadingFilters] = useState(false);
 
-  /* ========= جارِد: تحقق جلسة + مستخدم + دور ========= */
+  const resetFilters = () => {
+    setDateFrom(null);
+    setDateTo(null);
+    setSelectedRegion("");
+    setSelectedCity("");
+    setSelectedMarketName("");
+    setSelectedTeamLeader("");
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -279,22 +264,18 @@ export default function AdminDashboardPage() {
     return fromView || user?.username || "";
   }, [headerInfo, isAr, user?.username]);
 
-  /* ========= جلب Availability ========= */
   const fetchAvailabilityStats = useCallback(async () => {
     if (!clientId) return;
 
-    const today = ksaDate();
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 5);
-    const fiveYearsAgo = ksaDate(d);
-
-    const from_date = dateFrom || fiveYearsAgo;
-    const to_date = dateTo || today;
+    // ======================= تعديل: استخدام نطاق واسع في حال عدم وجود تاريخ =======================
+    const from_date_str = dateFrom ? ksaDate(dateFrom) : "1970-01-01";
+    const to_date_str = dateTo ? ksaDate(dateTo) : "2999-12-31";
+    // =========================================================================================
 
     const { data, error } = await supabase.rpc("get_availability_totals", {
       p_client_id: clientId,
-      p_from_date: from_date,
-      p_to_date: to_date,
+      p_from_date: from_date_str,
+      p_to_date: to_date_str,
       p_region: selectedRegion || null,
       p_city: selectedCity || null,
       p_store: (selectedMarketName || "").trim() || null,
@@ -315,22 +296,18 @@ export default function AdminDashboardPage() {
     setTotalUnavailable(Number(row.total_unavailable || 0));
   }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
-  // ── Visit cards RPC ──────────────────────────────
   const fetchVisitCards = useCallback(async () => {
     if (!clientId) return;
 
-    const today = ksaDate();
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 5);
-    const fiveYearsAgo = ksaDate(d);
-
-    const from_date = dateFrom || fiveYearsAgo;
-    const to_date = dateTo || today;
+    // ======================= تعديل: استخدام نطاق واسع في حال عدم وجود تاريخ =======================
+    const from_date_str = dateFrom ? ksaDate(dateFrom) : "1970-01-01";
+    const to_date_str = dateTo ? ksaDate(dateTo) : "2999-12-31";
+    // =========================================================================================
 
     const { data, error } = await supabase.rpc("get_visit_cards_totals", {
       p_client_id: clientId,
-      p_from_date: from_date,
-      p_to_date: to_date,
+      p_from_date: from_date_str,
+      p_to_date: to_date_str,
       p_region: selectedRegion || null,
       p_city: selectedCity || null,
       p_store: (selectedMarketName || "").trim() || null,
@@ -355,13 +332,11 @@ export default function AdminDashboardPage() {
     setUnfinishedPct(Number(row.unfinished_pct || 0));
   }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
-  /* ========= جلب بيانات الهيدر والعميل من الـ View ========= */
   const resolveClientAndDetails = useCallback(async () => {
     const { data: session } = await supabase.auth.getSession();
     const authUid = session?.session?.user?.id;
     if (!authUid) return;
 
-    // هات صف البروفايل من الڤيو
     const { data, error } = await supabase
       .from("v_user_company_profile")
       .select("*")
@@ -407,9 +382,8 @@ export default function AdminDashboardPage() {
     if (selectedCity) params.set("city", selectedCity);
     if (selectedMarketName) params.set("market", selectedMarketName);
     if (selectedTeamLeader) params.set("tl", selectedTeamLeader);
-    if (dateFrom) params.set("from", dateFrom);
-    if (dateTo) params.set("to", dateTo);
-
+    if (dateFrom) params.set("from", ksaDate(dateFrom));
+    if (dateTo) params.set("to", ksaDate(dateTo));
     router.push(`/admin/reports?${params.toString()}`);
   }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader, dateFrom, dateTo]);
 
@@ -420,9 +394,8 @@ export default function AdminDashboardPage() {
     if (selectedCity) params.set("city", selectedCity);
     if (selectedMarketName) params.set("market", selectedMarketName);
     if (selectedTeamLeader) params.set("tl", selectedTeamLeader);
-    if (dateFrom) params.set("from", dateFrom);
-    if (dateTo) params.set("to", dateTo);
-
+    if (dateFrom) params.set("from", ksaDate(dateFrom));
+    if (dateTo) params.set("to", ksaDate(dateTo));
     router.push(`/admin/visit-requests?${params.toString()}`);
   }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader, dateFrom, dateTo]);
 
@@ -443,7 +416,6 @@ export default function AdminDashboardPage() {
     router.push(`/admin/yesterday-visits?${params.toString()}`);
   }, [router, clientId, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
-  /* ========= جلب Team Leaders المرتبطين بالعميل فقط ========= */
   const fetchClientTeamLeaders = useCallback(async () => {
     if (!clientId) return;
     setLoadingFilters(true);
@@ -464,20 +436,23 @@ export default function AdminDashboardPage() {
 
     const { data: uData } = await supabase
       .from("Users")
-      .select("id,username,role")
+      .select("id,username,arabic_name,role")
       .in("id", userIds)
       .in("role", ["Team Leader", "team_leader", "TEAM_LEADER", "Team_Leader"]);
 
     const tls: TLUser[] =
-      ((uData as UserRow[]) || [])
-        .map((u) => ({ id: String(u.id), username: String(u.username || "") }))
+      ((uData as { id: string; username: string; arabic_name: string | null }[]) || [])
+        .map((u) => ({
+          id: String(u.id),
+          username: String(u.username || ""),
+          arabic_name: u.arabic_name,
+        }))
         .filter((u) => !!u.username);
 
     setTeamLeaders(tls);
     setLoadingFilters(false);
   }, [clientId]);
 
-  /* ========= جلب أسواق العميل عبر زياراته ========= */
   const fetchClientMarkets = useCallback(async () => {
     if (!clientId) {
       setAllMarkets([]);
@@ -485,10 +460,7 @@ export default function AdminDashboardPage() {
     }
     setLoadingFilters(true);
 
-    // 1) هات كل الزيارات بتاعت العميل (مقسّمة صفحات)
     const allVisits = await fetchAllRows<{ market_id: string | null }>("Visits", { client_id: clientId }, "market_id");
-
-    // 2) IDs بدون تكرار
     const ids = Array.from(new Set(allVisits.map((v) => v.market_id).filter((x): x is string => !!x)));
 
     if (ids.length === 0) {
@@ -497,7 +469,6 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    // 3) تفاصيل الماركتس
     const { data, error } = await supabase.from("Markets").select("id, region, city, store").in("id", ids);
 
     if (error || !data) {
@@ -511,14 +482,17 @@ export default function AdminDashboardPage() {
     setLoadingFilters(false);
   }, [clientId]);
 
-  /* ========= Presence/Visit/Transit من الـ VIEW الموحّد ========= */
   const fetchPresenceVisitTransit = useCallback(async () => {
-    if (!clientId || !dateFrom || !dateTo) {
+    // ======================= تعديل: تعديل شرط التحقق + استخدام نطاق واسع =======================
+    if (!clientId) {
       setPresenceSeconds(0);
       setVisitSeconds(0);
       setTransitSeconds(0);
       return;
     }
+    const from_date_str = dateFrom ? ksaDate(dateFrom) : "1970-01-01";
+    const to_date_str = dateTo ? ksaDate(dateTo) : "2999-12-31";
+    // =========================================================================================
 
     let q = supabase
       .from("v_presence_visit_unified")
@@ -527,8 +501,8 @@ export default function AdminDashboardPage() {
         head: false,
       })
       .eq("client_id", clientId)
-      .gte("snapshot_date", dateFrom)
-      .lte("snapshot_date", dateTo);
+      .gte("snapshot_date", from_date_str)
+      .lte("snapshot_date", to_date_str);
 
     if (selectedRegion) q = q.eq("region", selectedRegion);
     if (selectedCity) q = q.eq("city", selectedCity);
@@ -565,7 +539,6 @@ export default function AdminDashboardPage() {
     setTransitSeconds(transit);
   }, [clientId, dateFrom, dateTo, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader]);
 
-  /* ========= ربط الجلبات ========= */
   useEffect(() => {
     resolveClientAndDetails();
   }, [resolveClientAndDetails]);
@@ -582,7 +555,6 @@ export default function AdminDashboardPage() {
     fetchPresenceVisitTransit();
   }, [fetchPresenceVisitTransit]);
 
-  /* ========= إعادة الجلب عند التركيز ========= */
   useRefreshOnFocus(() => {
     resolveClientAndDetails();
     if (clientId) {
@@ -593,22 +565,13 @@ export default function AdminDashboardPage() {
     }
   });
 
-  /* ========= Handlers ========= */
-  const onFromChange = (v: string) => {
-    if (dateTo && v && new Date(v) > new Date(dateTo)) {
-      setDateTo(v);
+  const handleDateFromChange = (date: Date | null) => {
+    setDateFrom(date);
+    if (dateTo && date && date > dateTo) {
+      setDateTo(null);
     }
-    setDateFrom(v);
   };
 
-  const onToChange = (v: string) => {
-    if (dateFrom && v && new Date(v) < new Date(dateFrom)) {
-      setDateFrom(v);
-    }
-    setDateTo(v);
-  };
-
-  /* ========= Derivations ========= */
   const clientDisplayName = useMemo(() => {
     const fallback = isAr ? "اسم الشركة" : "Company Name";
     if (!headerInfo) return client?.name || client?.name_ar || fallback;
@@ -623,7 +586,6 @@ export default function AdminDashboardPage() {
     [headerInfo?.client_logo_filename, client?.logo_url]
   );
 
-  // فلترة متسلسلة (Region → City)
   const filteredByRegion = useMemo(
     () => (selectedRegion ? allMarkets.filter((m) => m.region === selectedRegion) : allMarkets),
     [allMarkets, selectedRegion]
@@ -650,7 +612,6 @@ export default function AdminDashboardPage() {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "ar"));
   }, [filteredByRegion]);
 
-  // أسواق مع id لعرضها في الـ select
   const marketOptions = useMemo(() => {
     const list = filteredByCity
       .filter((m): m is Required<Pick<MarketRow, "store">> & MarketRow => !!m.store)
@@ -660,9 +621,7 @@ export default function AdminDashboardPage() {
     return uniq.sort((a, b) => a.localeCompare(b, "ar"));
   }, [filteredByCity]);
 
-  /* ========= Data for stats ========= */
   const orderedStats = useMemo(() => {
-    // دوائر الوقت
     const presence = presenceSeconds;
     const visit = visitSeconds;
     const transit = transitSeconds;
@@ -670,19 +629,14 @@ export default function AdminDashboardPage() {
     const transitPctTime = presence ? (transit / presence) * 100 : 0;
 
     const base: Record<string, { value: number | string; percentage: number }> = {
-      // 🔵 بطاقات الزيارات (من RPC)
       "Total Visits": { value: totalVisits, percentage: 100 },
       "Completed Visits": { value: finishedVisits, percentage: finishedPct },
       "False Visits": { value: unfinishedVisits, percentage: unfinishedPct },
       "Completed %": { value: finishedPct, percentage: finishedPct },
       "False %": { value: unfinishedPct, percentage: unfinishedPct },
-
-      // 🟢 بطاقات الإتاحة
       "Total Items": { value: totalProducts, percentage: 100 },
       "Total Available": { value: totalAvailable, percentage: totalProducts ? (totalAvailable / totalProducts) * 100 : 0 },
       "Not Available": { value: totalUnavailable, percentage: totalProducts ? (totalUnavailable / totalProducts) * 100 : 0 },
-
-      // 🟠 دوائر الوقت
       "Avg Visit Time": { value: fmtHHMM(visit), percentage: visitPctTime },
       "Total Travel Time": { value: fmtHHMM(transit), percentage: transitPctTime },
     };
@@ -704,7 +658,6 @@ export default function AdminDashboardPage() {
     transitSeconds,
   ]);
 
-  /* ========= UI ========= */
   if (booting) {
     return (
       <div
@@ -737,7 +690,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
-      {/* SubHeader — Responsive width */}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
         <div
           style={{
@@ -752,7 +704,6 @@ export default function AdminDashboardPage() {
             padding: "10px 14px",
           }}
         >
-          {/* يسار: مرحبًا + لوجو */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
             {clientLogoUrl ? (
               <Image
@@ -781,8 +732,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </div>
-
-          {/* يمين: اسم الشركة كبير + زر تغيير كلمة المرور */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div
               title={clientDisplayName || ""}
@@ -818,7 +767,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Filters Row */}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 12, marginBottom: 12 }}>
         <div className="filtersRow no-scrollbar">
           <div style={capsuleStyle}>
@@ -887,38 +835,48 @@ export default function AdminDashboardPage() {
                 <option value="">{isAr ? "الكل" : "All"}</option>
                 {teamLeaders.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.username}
+                    {isAr ? t.arabic_name || t.username : t.username}
                   </option>
                 ))}
               </select>
             </CapsuleItem>
 
             <CapsuleItem label={isAr ? "من" : "Date From"}>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => onFromChange(e.target.value)}
-                onFocus={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                style={capsuleInput}
+              <DatePicker
+                selected={dateFrom}
+                onChange={handleDateFromChange}
+                selectsStart
+                startDate={dateFrom}
+                endDate={dateTo}
+                dateFormat="yyyy-MM-dd"
+                placeholderText={isAr ? "اختر تاريخ" : "Select date"}
+                className="capsule-datepicker"
               />
             </CapsuleItem>
 
             <CapsuleItem label={isAr ? "إلى" : "Date To"}>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => onToChange(e.target.value)}
-                onFocus={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                style={capsuleInput}
+              <DatePicker
+                selected={dateTo}
+                onChange={(date) => setDateTo(date)}
+                selectsEnd
+                startDate={dateFrom}
+                endDate={dateTo}
+                minDate={dateFrom}
+                dateFormat="yyyy-MM-dd"
+                placeholderText={isAr ? "اختر تاريخ" : "Select date"}
+                className="capsule-datepicker"
               />
             </CapsuleItem>
+
+            <button onClick={resetFilters} style={resetBtnStyle} title={isAr ? "إعادة تعيين الفلاتر" : "Reset Filters"}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 1-9 9m-9-9a9 9 0 0 1 9-9 9 9 0 0 1 6.2 2.7L12 9H5"/></svg>
+            </button>
           </div>
         </div>
       </div>
 
       <hr style={{ margin: "0 20px 20px", border: "none", borderTop: "1px solid var(--divider)" }} />
 
-      {/* Stats rows */}
       <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 20, marginBottom: 20 }}>
         {orderedStats.slice(0, 5).map((stat, idx) => (
           <StatCard key={`top-${idx}`} stat={stat} isArabic={isAr} />
@@ -933,7 +891,6 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 32, flexWrap: "wrap" }}>
         <button style={primaryBtnStyle} onClick={() => router.push("/admin/notifications")}>
           {isAr ? "الإشعارات" : "Notifications"}
@@ -949,7 +906,6 @@ export default function AdminDashboardPage() {
         </button>
       </div>
 
-      {/* --- Logo Modal --- */}
       {logoModalOpen && (
         <div style={overlayStyle} onClick={() => setLogoModalOpen(false)}>
           <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
@@ -990,7 +946,6 @@ export default function AdminDashboardPage() {
           }
         }
 
-        /* ✨ تصحيح ألوان option في الثيم الداكن */
         select option {
           color: #000;
           background: #fff;
@@ -999,6 +954,37 @@ export default function AdminDashboardPage() {
         .filtersRow select {
           color: var(--input-text);
           background-color: transparent;
+        }
+
+        .capsule-datepicker {
+          border: none !important;
+          outline: none !important;
+          background-color: transparent !important;
+          color: var(--input-text) !important;
+          font-size: 13px !important;
+          min-width: 110px !important;
+          padding: 0 !important;
+          width: 100%;
+        }
+        .capsule-datepicker::placeholder {
+            color: var(--muted);
+        }
+        .react-datepicker-popper {
+            z-index: 10;
+        }
+        .react-datepicker__header {
+          background-color: var(--card) !important;
+        }
+        .react-datepicker__month-container {
+            background-color: var(--card);
+            border: 1px solid var(--divider);
+        }
+        .react-datepicker__current-month, .react-datepicker-time__header, .react-datepicker-year-header,
+        .react-datepicker__day-name, .react-datepicker__day, .react-datepicker__time-name {
+            color: var(--text) !important;
+        }
+        .react-datepicker__day--disabled {
+            opacity: 0.3;
         }
       `}</style>
     </div>
@@ -1016,6 +1002,20 @@ const capsuleStyle: React.CSSProperties = {
   borderRadius: 9999,
   padding: 6,
   whiteSpace: "nowrap",
+};
+
+const resetBtnStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--input-bg)',
+    border: '1px solid var(--input-border)',
+    borderRadius: '50%',
+    width: 38,
+    height: 38,
+    color: 'var(--muted)',
+    cursor: 'pointer',
+    flexShrink: 0,
 };
 
 const itemShell: React.CSSProperties = {
@@ -1054,11 +1054,6 @@ const capsuleSelect: React.CSSProperties = {
   ...baseField,
   appearance: "none",
   paddingInlineEnd: 14,
-};
-
-const capsuleInput: React.CSSProperties = {
-  ...baseField,
-  minWidth: 130,
 };
 
 function CapsuleItem({ label, children }: { label: string; children: React.ReactNode }) {
