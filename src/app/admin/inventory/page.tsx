@@ -855,7 +855,7 @@ export default function InventoryReportPage() {
     key={lightboxImages[lightboxIndex]}
     src={lightboxImages[lightboxIndex]}
     alt="Inventory"
-    onLoadingComplete={() => setImgLoading(false)}
+    onLoad={() => setImgLoading(false)}
     onError={() => setImgLoading(false)}
     priority
     style={{
