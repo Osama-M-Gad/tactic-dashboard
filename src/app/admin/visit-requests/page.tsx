@@ -66,7 +66,7 @@ const STATUS_OPTIONS: { value: VisitRequestRow['daily_status'] | "", labelAr: st
     { value: "", labelAr: "الكل", labelEn: "All" },
     { value: "pending", labelAr: "معلّق", labelEn: "Pending" },
     { value: "approved", labelAr: "موافق", labelEn: "Approved" },
-    { value: "rejected", labelAr: "مرفوض", labelAr: "Rejected" },
+    { value: "rejected",  labelAr: "مرفوض",  labelEn: "Rejected" },
     { value: "cancelled", labelAr: "ملغى", labelEn: "Cancelled" },
 ];
 // =================================================================
