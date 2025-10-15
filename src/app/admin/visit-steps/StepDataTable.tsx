@@ -179,47 +179,52 @@ function isObjRecord(v: unknown): v is Record<string, unknown> {
     const arr: Row[] = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
     setRows(arr);
 
-    // ===== lookups (اختياري حسب cfg)
-    if (cfg.lookups) {
-      const next: Record<string, Record<string, string>> = {};
+   // ===== lookups (لو محدد في cfg)
+if (cfg.lookups) {
+  const next: Record<string, Record<string, string>> = {};
 
-    for (const [colKey, lu] of Object.entries(cfg.lookups)) {
-  const idsForLookup = Array.from(
-    new Set(
-      arr
-        .map((r) => r[colKey])
-        .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
-        .map((v) => String(v))
-    )
-  );
-  if (idsForLookup.length === 0) continue;
+  for (const [colKey, lu] of Object.entries(cfg.lookups)) {
+    // IDs فريدة للعمود المستهدف
+    const idsForLookup = Array.from(
+      new Set(
+        arr
+          .map((r) => r[colKey])
+          .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
+          .map((v) => String(v))
+      )
+    );
+    if (idsForLookup.length === 0) continue;
 
-  const lres = await supabase
-    .from(lu.table)
-    .select(lu.select)
-    .in("id", idsForLookup);
+    const lres = await supabase
+      .from(lu.table)
+      .select(lu.select)
+      .in("id", idsForLookup);
 
-  if (!lres.error && Array.isArray(lres.data)) {
-    const map: Record<string, string> = {};
-    const list = lres.data.filter(isObjRecord);
+    if (!lres.error && Array.isArray(lres.data)) {
+      const map: Record<string, string> = {};
 
-    for (const rec of list) {
-      const id = getId(rec);
-      const labelPrimary = getStr(rec, lu.labelField);
-      const labelArabic = getStr(rec, "arabic_name");
-      map[id] = (isArabic ? labelArabic : labelPrimary) || labelPrimary || labelArabic || id;
+      // حارس صريح لكل عنصر لمنع GenericStringError
+      for (const recUnknown of lres.data as unknown[]) {
+        if (!isObjRecord(recUnknown)) continue; // تجاهل أي عنصر مش Record
+        const rec = recUnknown as Record<string, unknown>;
+
+        const id = getId(rec);
+        const labelPrimary = getStr(rec, lu.labelField);
+        const labelArabic = getStr(rec, "arabic_name");
+        map[id] = (isArabic ? labelArabic : labelPrimary) || labelPrimary || labelArabic || id;
+      }
+
+      next[colKey] = map;
+    } else if (lres.error) {
+      console.warn("[StepDataTable] lookup error", printableError(lres.error));
     }
-    next[colKey] = map;
-  } else if (lres.error) {
-    console.warn("[StepDataTable] lookup error", printableError(lres.error));
   }
+
+  setLookups(next);
+} else {
+  setLookups({});
 }
 
-
-      setLookups(next);
-    } else {
-      setLookups({});
-    }
   } catch (e: unknown) {
     // رسالة مستخدم مفهومة
     let msg = "Failed to fetch";
