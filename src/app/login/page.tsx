@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
 import { useLangTheme } from "@/hooks/useLangTheme";
+import { v4 as uuidv4 } from "uuid";
 
 /* ===== Types ===== */
 type PortalUser = {
@@ -195,7 +196,17 @@ export default function LoginPage() {
       storage.setItem("currentUser", JSON.stringify(safeUser));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
-      const sessionKey = crypto.randomUUID();
+      // داخل handleLogin مكان السطر القديم
+let sessionKey: string;
+if (
+  typeof globalThis !== "undefined" &&
+  typeof globalThis.crypto !== "undefined" &&
+  typeof globalThis.crypto.randomUUID === "function"
+) {
+  sessionKey = globalThis.crypto.randomUUID();
+} else {
+  sessionKey = uuidv4();
+}
       await supabase.from("user_sessions").insert({
         user_id: user.id,
         session_key: sessionKey,
