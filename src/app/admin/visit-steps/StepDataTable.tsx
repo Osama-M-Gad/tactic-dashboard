@@ -6,7 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import { VISIT_STEPS, StepKey, StepConfig, StepColumn } from "@/utils/visitStepsMap";
 import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
-import BadgePill from "@/components/BadgePill";
+import BadgePill from "../../components/BadgePill";
+
 
 /* ===== Supabase ===== */
 const supabase = createClient(
