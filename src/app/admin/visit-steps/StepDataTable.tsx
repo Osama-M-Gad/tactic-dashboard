@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { VISIT_STEPS, StepKey, StepConfig, StepColumn } from "@/utils/visitStepsMap";
 import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
-import BadgePill from "../../components/BadgePill";
+import BadgePill from "@/components/BadgePill";
 
 
 /* ===== Supabase ===== */
@@ -205,9 +205,11 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                 const rec = v as Record<string, unknown>;
                 const vid = getId(rec);
                 const val =
-                  getStr(rec, "in_jp") ||
-                  getStr(rec, "jp_status") ||
-                  getStr(rec, "status_in_jp");
+  getStr(rec, "jp_state") ||   // 👈 أهم واحدة بما إنك بتسحبها
+  getStr(rec, "in_jp") ||
+  getStr(rec, "jp_status") ||
+  getStr(rec, "status_in_jp");
+
                 if (vid && val) map[vid] = val.trim();
               }
               setVisitStatusMap(map);
@@ -524,23 +526,42 @@ function CellRenderer({
       );
     }
 
-    case "pill": {
-  const raw = String(value).replace(/\s+/g," ").trim().toUpperCase();
-  const tone = raw.includes("OUT") ? "red" : raw.includes("IN") ? "green" : "gray";
-  return <BadgePill tone={tone}>{raw}</BadgePill>;
+   case "pill": {
+  const raw = String(value).replace(/\s+/g, " ").trim().toUpperCase();
+
+  const tone = raw.includes("OUT")
+    ? { bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", text: "#ef4444" } // OUT = أحمر
+    : raw.includes("IN")
+    ? { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.35)", text: "#16a34a" } // IN = أخضر
+    : { bg: "var(--chip-bg)", border: "var(--divider)", text: "var(--muted)" };       // افتراضي
+
+  return (
+    <BadgePill
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 12px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 800,
+        letterSpacing: 0.2,
+        background: tone.bg,
+        border: `1px solid ${tone.border}`,
+        color: tone.text,
+        minWidth: 64,
+        justifyContent: "center",
+        textTransform: "uppercase",
+      }}
+    >
+      {raw}
+    </BadgePill>
+  );
+}
+default: {
+  const text = String(value ?? "").trim();
+  return <span className="whitespace-pre-wrap break-words">{text || "—"}</span>;
 }
 
-    default: {
-      const text = String(value).trim();
-      const shouldPill =
-        /^[A-Z]{2}\s[A-Z]{2}$/.test(text) ||
-        ["in_jp", "jp_status", "status_in_jp", "market_code", "country_code", "region_code"].includes(column.key);
-
-      return shouldPill ? (
-        <BadgePill>{text}</BadgePill>
-      ) : (
-        <span className="whitespace-pre-wrap break-words">{text}</span>
-      );
-    }
   }
 }
