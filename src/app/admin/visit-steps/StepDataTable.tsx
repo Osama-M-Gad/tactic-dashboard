@@ -80,6 +80,10 @@ function printableError(e: unknown): Record<string, unknown> {
   }
   return { message: String(e) };
 }
+/** يتحقق أن القيمة سجل كائن بسيط {…} وليست Array أو null */
+function isObjRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
 
   /* ===== component ===== */
   export default function StepDataTable({ step, pageSize = 25, visitId = null }: Props) {
@@ -179,34 +183,38 @@ function printableError(e: unknown): Record<string, unknown> {
     if (cfg.lookups) {
       const next: Record<string, Record<string, string>> = {};
 
-      for (const [colKey, lu] of Object.entries(cfg.lookups)) {
-        const ids = Array.from(
-          new Set(
-            arr
-              .map((r) => r[colKey])
-              .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
-              .map((v) => String(v))
-          )
-        );
-        if (ids.length === 0) continue;
+    for (const [colKey, lu] of Object.entries(cfg.lookups)) {
+  const idsForLookup = Array.from(
+    new Set(
+      arr
+        .map((r) => r[colKey])
+        .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
+        .map((v) => String(v))
+    )
+  );
+  if (idsForLookup.length === 0) continue;
 
-        const lres = await supabase.from(lu.table).select(lu.select).in("id", ids);
-        if (!lres.error && Array.isArray(lres.data)) {
-          const map: Record<string, string> = {};
-          const list = lres.data as Record<string, unknown>[];
+  const lres = await supabase
+    .from(lu.table)
+    .select(lu.select)
+    .in("id", idsForLookup);
 
-          for (const rec of list) {
-            const id = getId(rec);
-            const labelPrimary = getStr(rec, lu.labelField);
-            const labelArabic = getStr(rec, "arabic_name");
-            map[id] = (isArabic ? labelArabic : labelPrimary) || labelPrimary || labelArabic || id;
-          }
-          next[colKey] = map;
-        } else if (lres.error) {
-          // اطبع تحذير lookup فقط ولا توقف الجدول كله
-          console.warn("[StepDataTable] lookup error", printableError(lres.error));
-        }
-      }
+  if (!lres.error && Array.isArray(lres.data)) {
+    const map: Record<string, string> = {};
+    const list = lres.data.filter(isObjRecord);
+
+    for (const rec of list) {
+      const id = getId(rec);
+      const labelPrimary = getStr(rec, lu.labelField);
+      const labelArabic = getStr(rec, "arabic_name");
+      map[id] = (isArabic ? labelArabic : labelPrimary) || labelPrimary || labelArabic || id;
+    }
+    next[colKey] = map;
+  } else if (lres.error) {
+    console.warn("[StepDataTable] lookup error", printableError(lres.error));
+  }
+}
+
 
       setLookups(next);
     } else {
