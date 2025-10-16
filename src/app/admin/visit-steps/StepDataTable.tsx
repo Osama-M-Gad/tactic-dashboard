@@ -8,7 +8,6 @@ import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
 import BadgePill from "@/components/BadgePill";
 
-
 /* ===== Supabase ===== */
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -26,9 +25,8 @@ type Props = {
 };
 
 /* ===== ثوابت خاصة بحقل حالة JP + جدول الزيارات ===== */
-const JP_FIELDS = ['jp_state'] as const;
-// لو جدولك اسمه مختلف (مثلاً visitrequests أو visits_data) غيّره هنا:
-const VISITS_TABLE = "DailyVisitSnapshots";
+const JP_FIELDS = ["jp_state"] as const; // لو الاسم مختلف غيّره هنا
+const VISITS_TABLE = "DailyVisitSnapshots"; // لو جدولك اسمه مختلف غيّره هنا
 
 /* ===== helpers: قراءة آمنة بدون any ===== */
 function getStr(obj: Record<string, unknown> | undefined, key: string): string {
@@ -48,6 +46,12 @@ function getId(obj: Record<string, unknown> | undefined): string {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const PUBLIC_BASE = `${SUPABASE_URL}/storage/v1/object/public`;
 const isAbsUrl = (u: string) => /^(https?:|data:|blob:)/i.test(u);
+function getVisitId(row: Row): string {
+  const v = (row as Record<string, unknown>)["visit_id"] as unknown;
+  if (typeof v === "string") return v;
+  if (v == null) return "";
+  return String(v);
+}
 
 function toPublicUrl(u?: string | null, bucketHint?: string): string {
   if (!u) return "";
@@ -141,15 +145,6 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
     setErrMsg(null);
 
     try {
-      console.debug("[StepDataTable] fetch params", {
-        table: cfg.table,
-        select: cfg.select,
-        defaultOrder: cfg.defaultOrder,
-        page,
-        pageSize,
-        visitId,
-      });
-
       const from = page * pageSize;
       const to = from + pageSize - 1;
       if (from < 0 || to < from) {
@@ -162,7 +157,6 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
       if (cfg.defaultOrder) q = q.order(cfg.defaultOrder.column, { ascending: cfg.defaultOrder.ascending });
 
       const res = await q;
-
       if (res.error) {
         const err = res.error;
         let message = err.message || "Query failed";
@@ -185,16 +179,12 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
 
         if (!hasInlineJP) {
           const visitIds = Array.from(
-            new Set(
-              arr
-                .map((r) => (typeof r.visit_id === "string" ? r.visit_id : String(r.visit_id ?? "")))
-                .filter(Boolean)
-            )
-          );
+  new Set(arr.map((r) => getVisitId(r)).filter(Boolean))
+);
 
           if (visitIds.length) {
             const { data: vData, error: vErr } = await supabase
-              .from(VISITS_TABLE) // ← غيّر الاسم لو مختلف
+              .from(VISITS_TABLE)
               .select(`id, ${JP_FIELDS.join(", ")}`)
               .in("id", visitIds);
 
@@ -205,11 +195,10 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                 const rec = v as Record<string, unknown>;
                 const vid = getId(rec);
                 const val =
-  getStr(rec, "jp_state") ||   // 👈 أهم واحدة بما إنك بتسحبها
-  getStr(rec, "in_jp") ||
-  getStr(rec, "jp_status") ||
-  getStr(rec, "status_in_jp");
-
+                  getStr(rec, "jp_state") || // 👈 أهم واحدة
+                  getStr(rec, "in_jp") ||
+                  getStr(rec, "jp_status") ||
+                  getStr(rec, "status_in_jp");
                 if (vid && val) map[vid] = val.trim();
               }
               setVisitStatusMap(map);
@@ -234,14 +223,14 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
           const idsForLookup = Array.from(
             new Set(
               arr
-                .map((r) => r[colKey])
+                .map((r) => (r as Row)[colKey])
                 .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
                 .map((v) => String(v))
             )
           );
           if (idsForLookup.length === 0) continue;
 
-        const lres = await supabase.from(lu.table).select(lu.select).in("id", idsForLookup);
+          const lres = await supabase.from(lu.table).select(lu.select).in("id", idsForLookup);
 
           if (!lres.error && Array.isArray(lres.data)) {
             const map: Record<string, string> = {};
@@ -306,69 +295,72 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
             </tr>
           </thead>
 
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="px-3 py-4" colSpan={visibleCols.length}>
-                  …loading
-                </td>
+        <tbody>
+          {loading ? (
+            <tr>
+              <td className="px-3 py-4" colSpan={visibleCols.length}>
+                …loading
+              </td>
+            </tr>
+          ) : errMsg ? (
+            <tr>
+              <td className="px-3 py-4 text-red-400" colSpan={visibleCols.length}>
+                {errMsg}
+              </td>
+            </tr>
+          ) : rows.length === 0 ? (
+            <tr>
+              <td className="px-3 py-4" colSpan={visibleCols.length}>
+                {isArabic ? "لا توجد بيانات" : "No data"}
+              </td>
+            </tr>
+          ) : (
+            rows.map((r, ridx) => (
+              <tr key={(r.id as string) ?? ridx} className="odd:bg-[var(--card)] even:bg-transparent">
+                {visibleCols.map((col) => {
+                  const rawV = r[col.key as keyof Row];
+
+                  // تطبيق lookup إن وجد
+                  const lu = cfg.lookups?.[col.key];
+                  let display: unknown =
+                    lu && (typeof rawV === "string" || typeof rawV === "number")
+                      ? (lookups[col.key]?.[String(rawV)] ?? rawV)
+                      : rawV;
+
+                  // لو العمود خاص بـ JP وحصّلنا القيمة من جدول الزيارات
+                  if (
+  (!display || String(display).trim() === "" || display === "-") &&
+  JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) &&
+  (r as Row).visit_id
+) {
+  const vid = getVisitId(r as Row);            // ← دايمًا string
+  if (vid) {
+    const jp = visitStatusMap[vid as keyof typeof visitStatusMap];
+    if (jp) display = jp;
+  }
+}
+
+                  const forcedType: CellType =
+                    (col.type as CellType | undefined) ??
+                    (JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) ? "pill" : "text");
+
+                  return (
+                    <td key={col.key} className="px-3 py-2 border-t border-[var(--divider)] align-top">
+                      <CellRenderer
+                        value={display}
+                        type={forcedType}
+                        bucketHint={col.bucketHint}
+                        isArabic={isArabic}
+                        onPreview={(imgs, title) => openViewer(imgs, title)}
+                        column={col}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
-            ) : errMsg ? (
-              <tr>
-                <td className="px-3 py-4 text-red-400" colSpan={visibleCols.length}>
-                  {errMsg}
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td className="px-3 py-4" colSpan={visibleCols.length}>
-                  {isArabic ? "لا توجد بيانات" : "No data"}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r, ridx) => (
-                <tr key={(r.id as string) ?? ridx} className="odd:bg-[var(--card)] even:bg-transparent">
-                  {visibleCols.map((col) => {
-                    const rawV = r[col.key as keyof Row];
-
-                    // تطبيق lookup إن وجد
-                    const lu = cfg.lookups?.[col.key];
-                    let display: unknown =
-                      lu && (typeof rawV === "string" || typeof rawV === "number")
-                        ? (lookups[col.key]?.[String(rawV)] ?? rawV)
-                        : rawV;
-
-                    // لو العمود خاص بـ JP وحصّلنا القيمة من جدول الزيارات
-                    if (
-                      (!display || String(display).trim() === "" || display === "-") &&
-                      JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) &&
-                      r.visit_id
-                    ) {
-                      const vid = typeof r.visit_id === "string" ? r.visit_id : String(r.visit_id);
-                      if (visitStatusMap[vid]) display = visitStatusMap[vid];
-                    }
-
-                    const forcedType: CellType =
-                      (col.type as CellType | undefined) ??
-                      (JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) ? "pill" : "text");
-
-                    return (
-                      <td key={col.key} className="px-3 py-2 border-t border-[var(--divider)] align-top">
-                        <CellRenderer
-                          value={display}
-                          type={forcedType}
-                          bucketHint={col.bucketHint}
-                          isArabic={isArabic}
-                          onPreview={(imgs, title) => openViewer(imgs, title)}
-                          column={col}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
-            )}
-          </tbody>
+            ))
+          )}
+        </tbody>
         </table>
       </div>
 
@@ -526,42 +518,42 @@ function CellRenderer({
       );
     }
 
-   case "pill": {
-  const raw = String(value).replace(/\s+/g, " ").trim().toUpperCase();
+    case "pill": {
+      const raw = String(value).replace(/\s+/g, " ").trim().toUpperCase();
 
-  const tone = raw.includes("OUT")
-    ? { bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", text: "#ef4444" } // OUT = أحمر
-    : raw.includes("IN")
-    ? { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.35)", text: "#16a34a" } // IN = أخضر
-    : { bg: "var(--chip-bg)", border: "var(--divider)", text: "var(--muted)" };       // افتراضي
+      const tone = raw.includes("OUT")
+        ? { bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", text: "#ef4444" } // OUT = أحمر
+        : raw.includes("IN")
+        ? { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.35)", text: "#16a34a" } // IN = أخضر
+        : { bg: "var(--chip-bg)", border: "var(--divider)", text: "var(--muted)" }; // افتراضي
 
-  return (
-    <BadgePill
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 800,
-        letterSpacing: 0.2,
-        background: tone.bg,
-        border: `1px solid ${tone.border}`,
-        color: tone.text,
-        minWidth: 64,
-        justifyContent: "center",
-        textTransform: "uppercase",
-      }}
-    >
-      {raw}
-    </BadgePill>
-  );
-}
-default: {
-  const text = String(value ?? "").trim();
-  return <span className="whitespace-pre-wrap break-words">{text || "—"}</span>;
-}
+      return (
+        <BadgePill
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 12px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: 0.2,
+            background: tone.bg,
+            border: `1px solid ${tone.border}`,
+            color: tone.text,
+            minWidth: 64,
+            justifyContent: "center",
+            textTransform: "uppercase",
+          }}
+        >
+          {raw}
+        </BadgePill>
+      );
+    }
 
+    default: {
+      const text = String(value ?? "").trim();
+      return <span className="whitespace-pre-wrap break-words">{text || "—"}</span>;
+    }
   }
 }
