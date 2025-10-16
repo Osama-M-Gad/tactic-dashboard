@@ -32,6 +32,7 @@ type VisitRow = {
   finished_at: string | null;
   status: string | null;
   end_reason: string | null;
+  jp_state?: "IN JP" | "OUT OF JP" | null;   
 };
 
 /* ========= CORS ========= */
@@ -71,6 +72,8 @@ function diffClock(start: string | null, end: string | null): string {
 }
 
 function renderTable(rows: VisitRow[], dateLabel: string): string {
+  const filtered = rows.filter(r => !( (r.status?.toLowerCase() === "pending") && (r.jp_state === "OUT OF JP") ));
+
   const head = `
     <h2 style="margin:0 0 10px;font-family:Arial">زيارات أمس (${dateLabel})</h2>
     <table border="1" cellspacing="0" cellpadding="6"
@@ -85,28 +88,37 @@ function renderTable(rows: VisitRow[], dateLabel: string): string {
           <th>وقت الانتهاء</th>
           <th>مدة الزيارة</th>
           <th>الحالة</th>
+          <th>JP حالة</th>
         </tr>
       </thead>
       <tbody>`;
-  const body =
-    rows
-      .map(
-        (r) => `
-        <tr style="text-align:center">
-          <td>${r.user_name ?? "-"}</td>
-          <td>${r.team_leader_name ?? "-"}</td>
-          <td>${r.market_store ?? "-"}</td>
-          <td>${r.market_branch ?? "-"}</td>
-          <td>${fmtTime(r.started_at)}</td>
-          <td>${fmtTime(r.finished_at)}</td>
-          <td>${diffClock(r.started_at, r.finished_at)}</td>
-          <td>${r.status ?? (r.end_reason ? "منتهية" : "معلقة")}</td>
-        </tr>`
-      )
-      .join("") ||
-    `<tr><td colspan="8" style="text-align:center;color:#888">لا توجد زيارات</td></tr>`;
+
+  const body = filtered.length
+    ? filtered.map(r => {
+        const jp = (r.status?.toLowerCase() === "pending")
+          ? "OUT OF JP"
+          : (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP" ? r.jp_state : "IN JP");
+
+        return `
+          <tr style="text-align:center">
+            <td>${r.user_name ?? "-"}</td>
+            <td>${r.team_leader_name ?? "-"}</td>
+            <td>${r.market_store ?? "-"}</td>
+            <td>${r.market_branch ?? "-"}</td>
+            <td>${fmtTime(r.started_at)}</td>
+            <td>${fmtTime(r.finished_at)}</td>
+            <td>${diffClock(r.started_at, r.finished_at)}</td>
+            <td>${r.status ?? (r.end_reason ? "ended" : "pending")}</td>
+            <td>${jp}</td>
+          </tr>`;
+      }).join("")
+    : `<tr><td colspan="9" style="text-align:center;color:#888">لا توجد زيارات</td></tr>`;
+
   return `${head}${body}</tbody></table>`;
 }
+
+
+
 
 function ksaYesterdayISODate(): string {
   // أمس بتوقيت الرياض كـ YYYY-MM-DD
@@ -206,34 +218,41 @@ serve(async (req: Request) => {
 
     // Helper to build visits query from plain filters (لا يعتمد على فلاتر الجدول)
     const buildVisits = async (args: {
-      client_id?: string;
-      user_id?: string;
-      region?: string;
-      city?: string;
-      store?: string;
-      status?: string;
-      team_leader_id?: string;
-    }) => {
-      let vq = sb
-        .from("visits_details_v")
-        .select(
-          "user_name, team_leader_name, market_store, market_branch, started_at, finished_at, status, end_reason, market_region, market_city, client_id",
-          { count: "exact" }
-        )
-        .eq("snapshot_date_raw", dateY);
+  client_id?: string;
+  user_id?: string;
+  region?: string;
+  city?: string;
+  store?: string;
+  status?: string;
+  team_leader_id?: string;
+}) => {
+  let vq = sb
+    .from("visits_details_v")
+    .select(
+      "user_name, team_leader_name, market_store, market_branch, started_at, finished_at, status, end_reason, jp_state, market_region, market_city, client_id",
+      { count: "exact" }
+    )
+    .eq("snapshot_date_raw", dateY);
 
-      if (args.client_id) vq = vq.eq("client_id", args.client_id);
-      if (args.user_id) vq = vq.eq("user_id", args.user_id);
-      if (args.team_leader_id) vq = vq.eq("team_leader_id", args.team_leader_id);
-      if (args.region) vq = vq.eq("market_region", args.region);
-      if (args.city) vq = vq.eq("market_city", args.city);
-      if (args.store) vq = vq.eq("market_store", args.store);
-      vq = applyStatusFilter(vq, args.status);
+  if (args.client_id) vq = vq.eq("client_id", args.client_id);
+  if (args.user_id) vq = vq.eq("user_id", args.user_id);
+  if (args.team_leader_id) vq = vq.eq("team_leader_id", args.team_leader_id);
+  if (args.region) vq = vq.eq("market_region", args.region);
+  if (args.city) vq = vq.eq("market_city", args.city);
+  if (args.store) vq = vq.eq("market_store", args.store);
 
-      const { data, error } = await vq.order("started_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as VisitRow[];
-    };
+  // فلتر الحالة (لو متبعت من الداشبورد)
+  vq = applyStatusFilter(vq, args.status);
+
+  // 👈 أهم سطر: استبعاد pending + OUT OF JP
+  // نحتفظ بأي صف jp_state = IN JP أو الحالة ليست pending
+  vq = vq.or("jp_state.eq.IN%20JP,status.neq.pending");
+
+  const { data, error } = await vq.order("started_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VisitRow[];
+};
+
 
     const sendEmail = async (to: string, html: string) => {
       const res = await fetch("https://api.resend.com/emails", {

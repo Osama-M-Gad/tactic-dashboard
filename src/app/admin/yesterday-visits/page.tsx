@@ -277,14 +277,12 @@ export default function YesterdayVisitsPage() {
     return isAr ? "معلقة" : "Pending";
   }, [isAr]);
 
-  // عرض JP النهائي (بالfallback لو الـ DB مرجعش القيمة)
-  const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" | "-" => {
-    if (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") return r.jp_state;
-    // Pending في الـ snapshots = IN JP حسب القاعدة
-    const st = rowStatus(r);
-    if (st === (isAr ? "معلقة" : "Pending")) return "IN JP";
-    return "-";
-  }, [rowStatus, isAr]);
+ // ❶ الأفضل: اعتمد على الـ DB أولاً، ولو مارجعش قيمة اعرض IN JP كـ default
+const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
+  if (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") return r.jp_state;
+  // TODO: لو محتاج منطق أدقّ، خليه في الـ RPC عشان يكون مصدر الحقيقة.
+  return "IN JP";
+}, []);
 
   const hydrateFilters = useCallback(() => {
     const rset = new Set<string>(), cset = new Set<string>(), sset = new Set<string>();
@@ -363,9 +361,13 @@ export default function YesterdayVisitsPage() {
   };
   const capsuleSelect: React.CSSProperties = { ...baseField, paddingInlineEnd: 14 };
   const thStyle: React.CSSProperties = {
-    textAlign: "center", padding: "12px 10px", fontWeight: 800, borderBottom: "1px solid var(--divider)",
-  };
-  const tdStyle: React.CSSProperties = { textAlign: "center", padding: "12px 10px" };
+  textAlign: "center",
+  padding: "10px 10px",      // كان 12px
+  fontWeight: 800,
+  borderBottom: "1px solid var(--divider)",
+};
+const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px" }; // كان 12px
+
   const tdCenterMuted: React.CSSProperties = { textAlign: "center", padding: 20, color: "var(--muted)" };
   const modalOverlayStyle: React.CSSProperties = {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -542,9 +544,15 @@ export default function YesterdayVisitsPage() {
       {/* Table */}
       <div style={{ display: "flex", justifyContent: "center" }}>
         <div
-          style={{ width: "min(1100px, 94vw)", background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, overflowX: "auto" }}
-          className="no-scrollbar"
-        >
+  style={{
+    width: "min(1100px, 94vw)",
+    background: "var(--card)",
+    border: "1px solid var(--divider)",
+    borderRadius: 16,
+    overflow: "hidden"        // ← مهم عشان الحواف تبان نظيفة
+  }}
+  className="no-scrollbar"
+>
           <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -571,15 +579,21 @@ export default function YesterdayVisitsPage() {
                   const images = parseImagePaths(r.end_visit_photo);
                   const jp = rowJP(r);
                   const jpStyle: React.CSSProperties = {
-                    display: "inline-block",
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 800,
-                    background: jp === "IN JP" ? "rgba(34,197,94,0.15)" : jp === "OUT OF JP" ? "rgba(239,68,68,0.15)" : "var(--chip-bg)",
-                    border: `1px solid ${jp === "IN JP" ? "rgba(34,197,94,0.35)" : jp === "OUT OF JP" ? "rgba(239,68,68,0.35)" : "var(--divider)"}`,
-                    color: jp === "IN JP" ? "#16a34a" : jp === "OUT OF JP" ? "#ef4444" : "var(--muted)",
-                  };
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 12px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  background: jp === "IN JP" ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.14)",
+  border: `1px solid ${jp === "IN JP" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+  color: jp === "IN JP" ? "#16a34a" : "#ef4444",
+  minWidth: 64,
+  justifyContent: "center",
+  textTransform: "uppercase",
+};
 
                   return (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--divider)" }}>
@@ -597,7 +611,9 @@ export default function YesterdayVisitsPage() {
                       <td style={tdStyle}>{toKSAClock(r.finished_at, isAr)}</td>
                       <td style={tdStyle}>{durMs ? msToClock(durMs) : "-"}</td>
                       <td style={tdStyle}>{rowStatus(r)}</td>
-                      <td style={tdStyle}><span style={jpStyle}>{jp}</span></td>
+                      <td style={tdStyle}>
+  <span style={jpStyle}>{rowJP(r)}</span>
+</td>
                       <td style={tdStyle}>{(isAr ? r.end_reason_ar : r.end_reason_en) || r.end_reason || "-"}</td>
                       <td style={tdStyle}>
                         {images.length > 0 ? (
@@ -685,10 +701,21 @@ export default function YesterdayVisitsPage() {
       )}
 
       <style jsx global>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        select option { color: #000; background: #fff; }
-      `}</style>
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* صفوف أنضف: خط تقسيم خفيف بين الصفوف فقط */
+  table tbody tr + tr td { border-top: 1px solid var(--divider); }
+
+  /* رأس الجدول ثابت وبخلفية أغمق قليلًا */
+  thead th { background: var(--header-bg); position: sticky; top: 0; z-index: 1; }
+
+  /* خلايا الـ td لتوسيط المحتوى رأسيًا */
+  td { vertical-align: middle; }
+  
+  /* خيارات الـ select بخلفية فاتحة */
+  select option { color: #000; background: #fff; }
+`}</style>
     </div>
   );
 }
