@@ -16,8 +16,14 @@ export type StepColumn = {
   labelAr: string;
   labelEn: string;
   type?: "text" | "number" | "datetime" | "image" | "boolean" | "pill";
-  /** لمعاونة SupaImg لو عندك ملف بدون مسار كامل */
   bucketHint?: string;
+};
+
+export type StepLookupConfig = {
+  table: string;
+  select: string;
+  labelField: string;
+  labelFieldAr?: string;
 };
 
 export type StepConfig = {
@@ -27,14 +33,9 @@ export type StepConfig = {
   select: string;
   defaultOrder?: { column: string; ascending: boolean };
   columns: StepColumn[];
-  /** عرض أسماء بدل UUID */
-  lookups?: Record<
-    string,
-    { table: string; select: string; labelField: string }
-  >;
+  lookups?: Record<string, StepLookupConfig>;
 };
 
-/** أسماء البَكِت زي ما هي في الكود الطويل */
 const BUCKETS = {
   arrival: "arrival-photos",
   availability: "availability-photos",
@@ -52,11 +53,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "صور الوصول",
     titleEn: "Arrival Photos",
     table: "arrivalphotos",
-    // photos[] + arrival_time + created_at
-    select: "id, visit_id, user_id, photos, arrival_time, created_at",
+    select: "id, visit_id, user_id, photos, arrival_time, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈 جديد
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photos", labelAr: "الصور", labelEn: "Photos", type: "image", bucketHint: BUCKETS.arrival },
       { key: "arrival_time", labelAr: "وقت الوصول", labelEn: "Arrival Time", type: "datetime" },
       { key: "user_id", labelAr: "المستخدم", labelEn: "User" },
@@ -64,7 +64,12 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
       { key: "visit_id", labelAr: "الزيارة", labelEn: "Visit" },
     ],
     lookups: {
-      user_id: { table: "Users", select: "id,name,arabic_name", labelField: "name" },
+      user_id: {
+        table: "Users",
+        select: "id,name,arabic_name",
+        labelField: "name",
+        labelFieldAr: "arabic_name",
+      },
     },
   },
 
@@ -73,38 +78,53 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleEn: "Availability",
     table: "availabilitydata",
     select:
-      "id, visit_id, place_id, category_id, product_name, is_available, quantity, reason, custom_reason, item_photo, reason_photos, place_photos, created_at",
+      "id, visit_id, user_id, place_id, category_id, product_name, is_available, quantity, reason, custom_reason, reason_photos, place_photos, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "product_name", labelAr: "المنتج", labelEn: "Product" },
       { key: "is_available", labelAr: "متاح؟", labelEn: "Available?", type: "boolean" },
       { key: "quantity", labelAr: "الكمية", labelEn: "Qty", type: "number" },
       { key: "reason", labelAr: "السبب", labelEn: "Reason" },
       { key: "custom_reason", labelAr: "سبب مخصص", labelEn: "Custom Reason" },
-      { key: "item_photo", labelAr: "صورة المنتج", labelEn: "Item Photo", type: "image", bucketHint: BUCKETS.availability },
       { key: "reason_photos", labelAr: "صور السبب", labelEn: "Reason Photos", type: "image", bucketHint: BUCKETS.availability },
       { key: "place_photos", labelAr: "صور المكان", labelEn: "Place Photos", type: "image", bucketHint: BUCKETS.availability },
+      { key: "user_id", labelAr: "المستخدم", labelEn: "User" },
       { key: "created_at", labelAr: "التاريخ", labelEn: "Created At", type: "datetime" },
       { key: "place_id", labelAr: "المكان", labelEn: "Place" },
       { key: "category_id", labelAr: "الفئة", labelEn: "Category" },
       { key: "visit_id", labelAr: "الزيارة", labelEn: "Visit" },
-     ],
-     lookups: {
-       place_id: { table: "Markets", select: "id, branch, store, city", labelField: "branch" },
-       category_id: { table: "Categories", select: "id, name_ar, name_en", labelField: "name_en" },
-     },
+    ],
+    lookups: {
+      user_id: {
+        table: "Users",
+        select: "id,name,arabic_name",
+        labelField: "name",
+        labelFieldAr: "arabic_name",
+      },
+      place_id: {
+        table: "Markets",
+        select: "id, branch, branch_ar",
+        labelField: "branch",
+        labelFieldAr: "branch_ar",
+      },
+      category_id: {
+        table: "Categories",
+        select: "id, name_en, name_ar",
+        labelField: "name_en",
+        labelFieldAr: "name_ar",
+      },
+    },
   },
 
   whcount: {
     titleAr: "المستودع",
     titleEn: "Warehouse Count",
     table: "whcount",
-    select:
-      "id, visit_id, item_name, quantity, is_available, warehouse_photos, item_photo, custom_reason, created_at",
+    select: "id, visit_id, item_name, quantity, warehouse_photos, item_photo, custom_reason, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "warehouse_photos", labelAr: "صور المستودع", labelEn: "Warehouse", type: "image", bucketHint: BUCKETS.whcount },
       { key: "item_name", labelAr: "العنصر", labelEn: "Item" },
       { key: "quantity", labelAr: "الكمية", labelEn: "Qty", type: "number" },
@@ -119,11 +139,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "التوالف",
     titleEn: "Damage Reports",
     table: "damagereports",
-    select:
-      "id, visit_id, item_name, photos, expire_date, damaged_qty, near_expire_date, near_expire_qty, expire_qty, created_at",
+    select: "id, visit_id, item_name, photos, expire_date, damaged_qty, near_expire_date, near_expire_qty, expire_qty, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photos", labelAr: "الصور", labelEn: "Photos", type: "image", bucketHint: BUCKETS.damage },
       { key: "item_name", labelAr: "العنصر", labelEn: "Item" },
       { key: "damaged_qty", labelAr: "تالف", labelEn: "Damaged", type: "number" },
@@ -140,10 +159,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "حصة الرف",
     titleEn: "Share of Shelf",
     table: "sos_reports",
-    select: "id, visit_id, category_name_ar, category_name_en, percentage, photos, created_at",
+    select: "id, visit_id, category_name_ar, category_name_en, percentage, photos, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photos", labelAr: "الصور", labelEn: "Photos", type: "image", bucketHint: BUCKETS.sos },
       { key: "category_name_ar", labelAr: "الفئة (عربي)", labelEn: "Category (AR)" },
       { key: "category_name_en", labelAr: "الفئة (إنجليزي)", labelEn: "Category (EN)" },
@@ -157,37 +176,49 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "نشاط المنافسين",
     titleEn: "Competitor Activity",
     table: "competitoractivities",
-    select:
-      "id, visit_id, product_name, old_price, new_price, notes, photos_before, photos_after, created_at",
+    select: "id, visit_id, user_id, product_name, old_price, new_price, notes, photos_before, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photos_before", labelAr: "قبل", labelEn: "Before", type: "image", bucketHint: BUCKETS.competitor },
-      { key: "photos_after", labelAr: "بعد", labelEn: "After", type: "image", bucketHint: BUCKETS.competitor },
       { key: "product_name", labelAr: "المنتج", labelEn: "Product" },
-      { key: "old_price", labelAr: "قبل", labelEn: "Old Price", type: "number" },
-      { key: "new_price", labelAr: "بعد", labelEn: "New Price", type: "number" },
+      { key: "old_price", labelAr: "سعر قديم", labelEn: "Old Price", type: "number" },
+      { key: "new_price", labelAr: "سعر جديد", labelEn: "New Price", type: "number" },
       { key: "notes", labelAr: "ملاحظات", labelEn: "Notes" },
+      { key: "user_id", labelAr: "المستخدم", labelEn: "User" },
       { key: "created_at", labelAr: "التاريخ", labelEn: "Created At", type: "datetime" },
       { key: "visit_id", labelAr: "الزيارة", labelEn: "Visit" },
     ],
+    lookups: {
+      user_id: {
+        table: "Users",
+        select: "id,name,arabic_name",
+        labelField: "name",
+        labelFieldAr: "arabic_name",
+      },
+    },
   },
 
   remarks: {
     titleAr: "ملاحظات",
     titleEn: "Remarks",
     table: "remarks",
-    select: "id, visit_id, remark, user_id, submit_at",
+    select: "id, visit_id, remark, user_id, submit_at", // تم الحذف من هنا
     defaultOrder: { column: "submit_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "remark", labelAr: "الملاحظة", labelEn: "Remark" },
       { key: "user_id", labelAr: "المستخدم", labelEn: "User" },
       { key: "submit_at", labelAr: "التاريخ", labelEn: "Submitted At", type: "datetime" },
       { key: "visit_id", labelAr: "الزيارة", labelEn: "Visit" },
     ],
     lookups: {
-      user_id: { table: "Users", select: "id,name,arabic_name", labelField: "name" },
+      user_id: {
+        table: "Users",
+        select: "id,name,arabic_name",
+        labelField: "name",
+        labelFieldAr: "arabic_name",
+      },
     },
   },
 
@@ -195,11 +226,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "تقارير المروج",
     titleEn: "Promoter Reports",
     table: "promoter_reports",
-    select:
-      "id, visit_id, customer_name, visit_count, refuse_count, buy_count, best_seller, image_urls, created_at",
+    select: "id, visit_id, customer_name, visit_count, refuse_count, buy_count, best_seller, image_urls, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "image_urls", labelAr: "الصور", labelEn: "Photos", type: "image", bucketHint: BUCKETS.promoter },
       { key: "customer_name", labelAr: "العميل", labelEn: "Customer" },
       { key: "visit_count", labelAr: "زيارات", labelEn: "Visits", type: "number" },
@@ -215,10 +245,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "أقسام الماسحين",
     titleEn: "Promoter+",
     table: "promoter_plus_reports",
-    select: "id, visit_id, items, photos, created_at",
+    select: "id, visit_id, items, photos, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photos", labelAr: "الصور", labelEn: "Photos", type: "image", bucketHint: BUCKETS.promoterPlus },
       { key: "items", labelAr: "عناصر", labelEn: "Items" },
       { key: "created_at", labelAr: "التاريخ", labelEn: "Created At", type: "datetime" },
@@ -230,10 +260,10 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
     titleAr: "تفاصيل قائد الفريق",
     titleEn: "TL Details",
     table: "tlvisitdetails",
-    select: "id, visit_id, user_id, photo_url, remark, created_at", // لا نحتاج in_jp هنا
+    select: "id, visit_id, user_id, photo_url, remark, created_at", // تم الحذف من هنا
     defaultOrder: { column: "created_at", ascending: false },
     columns: [
-      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" }, // 👈 موحّد
+      { key: "jp_state", labelAr: "JP حالة", labelEn: "JP Status", type: "pill" },
       { key: "photo_url", labelAr: "الصورة", labelEn: "Photo", type: "image", bucketHint: BUCKETS.tl },
       { key: "remark", labelAr: "ملاحظة", labelEn: "Remark" },
       { key: "user_id", labelAr: "المستخدم", labelEn: "User" },
@@ -241,7 +271,12 @@ export const VISIT_STEPS: Record<StepKey, StepConfig> = {
       { key: "visit_id", labelAr: "الزيارة", labelEn: "Visit" },
     ],
     lookups: {
-      user_id: { table: "Users", select: "id,name,arabic_name", labelField: "name" },
+      user_id: {
+        table: "Users",
+        select: "id,name,arabic_name",
+        labelField: "name",
+        labelFieldAr: "arabic_name",
+      },
     },
   },
 };

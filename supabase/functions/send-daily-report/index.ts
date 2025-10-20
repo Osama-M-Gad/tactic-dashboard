@@ -5,34 +5,29 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 /* ========= Types ========= */
 type UUID = string;
 
-type Filters =
-  | {
-      region?: string;
-      city?: string;
-      store?: string;
-      team_leader_id?: UUID;
-      status?: string;
-    }
-  | null;
-
 type ScheduleRow = {
   id: UUID;
   client_id: UUID | null;
   recipient_email: string;
-  filters: Filters;
+  // filters تبقى موجودة بالجدول لكن احنا مش هنستخدمها هنا، الـ RPC بتطبّقها جوة الـ DB
+  filters: unknown | null;
   is_active: boolean;
 };
 
+// شكل الصفوف الراجعة من get_report_visits (الحد الأدنى اللازم للتقرير)
 type VisitRow = {
   user_name: string | null;
   team_leader_name: string | null;
   market_store: string | null;
   market_branch: string | null;
+  /** ⬇⬇ أضف هذان الحقلان */
+  market_region: string | null;
+  market_city: string | null;
   started_at: string | null;
   finished_at: string | null;
   status: string | null;
   end_reason: string | null;
-  jp_state?: "IN JP" | "OUT OF JP" | null;   
+  jp_state?: "IN JP" | "OUT OF JP" | null;
 };
 
 /* ========= CORS ========= */
@@ -72,7 +67,9 @@ function diffClock(start: string | null, end: string | null): string {
 }
 
 function renderTable(rows: VisitRow[], dateLabel: string): string {
-  const filtered = rows.filter(r => !( (r.status?.toLowerCase() === "pending") && (r.jp_state === "OUT OF JP") ));
+  const filtered = rows.filter(
+    (r) => !((r.status?.toLowerCase() === "pending") && (r.jp_state === "OUT OF JP"))
+  );
 
   const head = `
     <h2 style="margin:0 0 10px;font-family:Arial">زيارات أمس (${dateLabel})</h2>
@@ -82,6 +79,8 @@ function renderTable(rows: VisitRow[], dateLabel: string): string {
         <tr>
           <th>المستخدم</th>
           <th>قائد الفريق</th>
+          <th>المنطقه</th>
+          <th>المدينه</th>
           <th>السوق</th>
           <th>الفرع</th>
           <th>وقت البدء</th>
@@ -94,15 +93,16 @@ function renderTable(rows: VisitRow[], dateLabel: string): string {
       <tbody>`;
 
   const body = filtered.length
-    ? filtered.map(r => {
-        const jp = (r.status?.toLowerCase() === "pending")
-          ? "OUT OF JP"
-          : (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP" ? r.jp_state : "IN JP");
+    ? filtered
+        .map((r) => {
+          const jp = (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") ? r.jp_state : "IN JP";
 
-        return `
+          return `
           <tr style="text-align:center">
             <td>${r.user_name ?? "-"}</td>
             <td>${r.team_leader_name ?? "-"}</td>
+            <td>${r.market_region ?? "-"}</td>
+            <td>${r.market_city ?? "-"}</td>
             <td>${r.market_store ?? "-"}</td>
             <td>${r.market_branch ?? "-"}</td>
             <td>${fmtTime(r.started_at)}</td>
@@ -111,14 +111,12 @@ function renderTable(rows: VisitRow[], dateLabel: string): string {
             <td>${r.status ?? (r.end_reason ? "ended" : "pending")}</td>
             <td>${jp}</td>
           </tr>`;
-      }).join("")
-    : `<tr><td colspan="9" style="text-align:center;color:#888">لا توجد زيارات</td></tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="11" style="text-align:center;color:#888">لا توجد زيارات</td></tr>`;
 
   return `${head}${body}</tbody></table>`;
 }
-
-
-
 
 function ksaYesterdayISODate(): string {
   // أمس بتوقيت الرياض كـ YYYY-MM-DD
@@ -127,24 +125,6 @@ function ksaYesterdayISODate(): string {
   const ksaY = new Date(ksaNow);
   ksaY.setUTCDate(ksaNow.getUTCDate() - 1);
   return ksaY.toISOString().slice(0, 10);
-}
-
-const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyStatusFilter(q: any, status?: string) {
-  const st = norm(status);
-  if (!st) return q;
-  if (["مكتملة", "finished"].some((x) => st.includes(norm(x)))) {
-    // finished: بدأ وانتهى وبدون end_reason
-    return q.is("end_reason", null).not("started_at", "is", null).not("finished_at", "is", null);
-  } else if (["منتهية", "ended"].some((x) => st.includes(norm(x)))) {
-    // ended: end_reason موجود
-    return q.not("end_reason", "is", null);
-  } else if (["معلقة", "pending"].some((x) => st.includes(norm(x)))) {
-    // pending: end_reason NULL وأيّ من البدء/الانتهاء مفقود
-    return q.is("end_reason", null).or("finished_at.is.null,started_at.is.null");
-  }
-  return q;
 }
 
 /* ========= Handler ========= */
@@ -168,25 +148,23 @@ serve(async (req: Request) => {
       );
     }
 
-    const headerCron = req.headers.get("x-cron-key");
-    const isCron = !!CRON_SECRET && headerCron === CRON_SECRET;
-    const hasBearer = !!req.headers.get("authorization");
+   const headerCron = req.headers.get("x-cron-key");
+const isCron = !!CRON_SECRET && headerCron === CRON_SECRET;
+const hasBearer = !!req.headers.get("authorization");
+// ✅ يسمح بنداء المجدول الداخلي من Supabase
+const isScheduler = !!req.headers.get("x-schedule");
 
-    if (!(isCron || hasBearer)) {
-      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    }
+if (!(isCron || hasBearer || isScheduler)) {
+  return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+}
+
 
     // Body (للوضع اليدوي فقط)
     type ManualBody = {
-      client_id?: string;
-      user_id?: string;
-      region?: string;
-      city?: string;
-      store?: string;
-      status?: string;
+      report_id?: string;           // ✅ دعم report_id المباشر في الوضع اليدوي
       recipient_emails?: string[];
     };
     let bodyJson: ManualBody = {};
@@ -196,12 +174,7 @@ serve(async (req: Request) => {
         if (raw && typeof raw === "object") {
           const b = raw as Record<string, unknown>;
           bodyJson = {
-            client_id: typeof b.client_id === "string" ? b.client_id : undefined,
-            user_id: typeof b.user_id === "string" ? b.user_id : undefined,
-            region: typeof b.region === "string" ? b.region : undefined,
-            city: typeof b.city === "string" ? b.city : undefined,
-            store: typeof b.store === "string" ? b.store : undefined,
-            status: typeof b.status === "string" ? b.status : undefined,
+            report_id: typeof b.report_id === "string" ? b.report_id : undefined,
             recipient_emails:
               Array.isArray(b.recipient_emails) && b.recipient_emails.every((x) => typeof x === "string")
                 ? (b.recipient_emails as string[])
@@ -216,43 +189,17 @@ serve(async (req: Request) => {
     const sb = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
     const dateY = ksaYesterdayISODate();
 
-    // Helper to build visits query from plain filters (لا يعتمد على فلاتر الجدول)
-    const buildVisits = async (args: {
-  client_id?: string;
-  user_id?: string;
-  region?: string;
-  city?: string;
-  store?: string;
-  status?: string;
-  team_leader_id?: string;
-}) => {
-  let vq = sb
-    .from("visits_details_v")
-    .select(
-      "user_name, team_leader_name, market_store, market_branch, started_at, finished_at, status, end_reason, jp_state, market_region, market_city, client_id",
-      { count: "exact" }
-    )
-    .eq("snapshot_date_raw", dateY);
+    // ✅ استخدام الدالة الجاهزة get_report_visits_v4 من قاعدة البيانات
+    const buildVisits = async (reportId: string) => {
+      const { data, error } = await sb.rpc("get_report_visits_v4", { report_id: reportId });
+      if (error) throw error;
+      return (data ?? []) as VisitRow[];
+    };
 
-  if (args.client_id) vq = vq.eq("client_id", args.client_id);
-  if (args.user_id) vq = vq.eq("user_id", args.user_id);
-  if (args.team_leader_id) vq = vq.eq("team_leader_id", args.team_leader_id);
-  if (args.region) vq = vq.eq("market_region", args.region);
-  if (args.city) vq = vq.eq("market_city", args.city);
-  if (args.store) vq = vq.eq("market_store", args.store);
-
-  // فلتر الحالة (لو متبعت من الداشبورد)
-  vq = applyStatusFilter(vq, args.status);
-
-  // 👈 أهم سطر: استبعاد pending + OUT OF JP
-  // نحتفظ بأي صف jp_state = IN JP أو الحالة ليست pending
-  vq = vq.or("jp_state.eq.IN%20JP,status.neq.pending");
-
-  const { data, error } = await vq.order("started_at", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as VisitRow[];
-};
-
+    // ======== Resend types + sendEmail (بدون any) ========
+    type ResendOk = { id: string };
+    type ResendErr = { message?: string; error?: unknown };
+    type ResendResp = ResendOk & Partial<ResendErr>;
 
     const sendEmail = async (to: string, html: string) => {
       const res = await fetch("https://api.resend.com/emails", {
@@ -262,19 +209,43 @@ serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: MAIL_FROM,
+          // جرّب مؤقتًا from = onboarding@resend.dev
+          // وبعد ما توثّق الدومين ارجع لـ MAIL_FROM
+          from: MAIL_FROM?.includes("@resend.dev") ? MAIL_FROM : "onboarding@resend.dev",
           to,
           subject: "Daily Report",
           html,
         }),
       });
-      return res.ok;
+
+      let json: unknown = null;
+      try {
+        json = await res.json();
+      } catch {
+        // احتمال مفيش body — تجاهل
+      }
+
+      console.log("[RESEND STATUS]", res.status, res.statusText);
+      if (json) console.log("[RESEND JSON]", JSON.stringify(json));
+
+      if (!res.ok) {
+        const j = json as ResendResp | null;
+        const msg = j?.message ?? (j?.error ? String(j.error) : res.statusText || "RESEND_ERROR");
+        throw new Error(msg);
+      }
+
+      const j = json as ResendResp | null;
+      if (!j?.id) {
+        throw new Error("Resend did not return an id");
+      }
+
+      return { ok: true as const, id: j.id };
     };
 
     let totalSent = 0;
 
     if (isCron) {
-      // ===== وضع الكرون: نقرأ الفلاتر من الجدول ونرسل لكل مستلم حسب صفه =====
+      // ===== وضع الكرون: نقرأ كل الصفوف المفعّلة ونستدعي الRPC بفلاتر الجدول تلقائيًا =====
       const { data: schedules, error: sErr } = await sb
         .from("scheduled_email_reports")
         .select("id, client_id, recipient_email, filters, is_active")
@@ -284,21 +255,14 @@ serve(async (req: Request) => {
       const list = (schedules ?? []) as ScheduleRow[];
 
       for (const s of list) {
-        const f = s.filters ?? {};
-        const visits = await buildVisits({
-          client_id: s.client_id ?? undefined,
-          team_leader_id: f.team_leader_id ?? undefined,
-          region: f.region ?? undefined,
-          city: f.city ?? undefined,
-          store: f.store ?? undefined,
-          status: f.status ?? undefined,
-        });
-
+        const visits = await buildVisits(s.id);
         const html = renderTable(visits, dateY);
         try {
-          if (await sendEmail(s.recipient_email, html)) totalSent++;
+          const r = await sendEmail(s.recipient_email, html);
+          console.log("Email OK (cron):", s.recipient_email, r.id);
+          totalSent++;
         } catch (err) {
-          console.log("Resend error (cron)", s.recipient_email, String(err));
+          console.log("Email FAIL (cron):", s.recipient_email, String(err));
         }
       }
 
@@ -307,28 +271,34 @@ serve(async (req: Request) => {
       });
     }
 
-    // ===== الوضع اليدوي: نبني الاستعلام من اختيارات الواجهة فقط، ونحدد المستلمين كما هو مذكور =====
-    const visits = await buildVisits({
-      client_id: bodyJson.client_id,
-      user_id: bodyJson.user_id,
-      region: bodyJson.region,
-      city: bodyJson.city,
-      store: bodyJson.store,
-      status: bodyJson.status,
-    });
+    // ===== الوضع اليدوي: لو جالنا report_id نستخدمه مباشرة؛ غير كده نبعث لكل المستلمين المفعّلين
+    let visits: VisitRow[] = [];
+    if (bodyJson.report_id) {
+      visits = await buildVisits(bodyJson.report_id);
+    } else {
+      // default manual: نبعث لنفس قائمة المستلمين المفعّلين (زي الكرون)
+      const { data: schedules, error: sErr } = await sb
+        .from("scheduled_email_reports")
+        .select("id, recipient_email")
+        .eq("is_active", true);
+      if (sErr) throw sErr;
+
+      // هنجمع HTML واحد لأول report_id (أو فاضي لو مفيش)
+      const firstId = schedules?.[0]?.id as string | undefined;
+      visits = firstId ? await buildVisits(firstId) : [];
+    }
+
     const html = renderTable(visits, dateY);
 
-    // المستلمين
+    // المستلمين في الوضع اليدوي
     let recipients: string[] = [];
     if (Array.isArray(bodyJson.recipient_emails) && bodyJson.recipient_emails.length > 0) {
       recipients = Array.from(new Set(bodyJson.recipient_emails.map((e) => e.trim()).filter(Boolean)));
     } else {
-      // جميع المفعّلين (وممكن ننزلهم على client لو متحدد)
-      let rq = sb
+      const rq = sb
         .from("scheduled_email_reports")
         .select("recipient_email", { distinct: true })
         .eq("is_active", true);
-      if (bodyJson.client_id) rq = rq.eq("client_id", bodyJson.client_id);
       const { data: rec, error: rErr } = await rq.order("recipient_email", { ascending: true });
       if (rErr) throw rErr;
       recipients = Array.from(
@@ -338,9 +308,11 @@ serve(async (req: Request) => {
 
     for (const to of recipients) {
       try {
-        if (await sendEmail(to, html)) totalSent++;
+        const r = await sendEmail(to, html);
+        console.log("Email OK (manual):", to, r.id);
+        totalSent++;
       } catch (err) {
-        console.log("Resend error (manual)", to, String(err));
+        console.log("Email FAIL (manual):", to, String(err));
       }
     }
 

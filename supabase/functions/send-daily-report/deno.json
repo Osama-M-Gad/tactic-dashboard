@@ -1,13 +1,1 @@
-{
-  "tasks": {},
-  "compilerOptions": {
-    "lib": ["deno.window", "dom", "esnext"]
-  },
-  "deploy": {
-    "include": ["**/*"],
-    "exclude": ["node_modules", ".next", ".vercel", "dist"]
-  },
-  "imports": {
-    "jsr:": "https://jsr.io/"
-  }
-}
+{"deploy":{"verify_jwt":false}}

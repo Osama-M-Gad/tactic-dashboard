@@ -312,8 +312,8 @@ export default function VisitRequestsPage() {
     }
 
     const requesterIds = Array.from(new Set(base.map(r => r.user_id).filter(Boolean))) as string[];
-    const approverIds  = Array.from(new Set(base.map(r => r.approved_by).filter(Boolean))) as string[];
-    const marketIds    = Array.from(new Set(base.map(r => r.market_id).filter(Boolean))) as string[];
+    const approverIds = Array.from(new Set(base.map(r => r.approved_by).filter(Boolean))) as string[];
+    const marketIds  = Array.from(new Set(base.map(r => r.market_id).filter(Boolean))) as string[];
 
     const [{ data: reqUsers }, { data: appUsers }, { data: mkts }] = await Promise.all([
       requesterIds.length
@@ -429,10 +429,10 @@ export default function VisitRequestsPage() {
   const filteredPending = useMemo(() => {
     return pending.filter(r => {
       const okRegion = selectedRegion ? r.market?.region === selectedRegion : true;
-      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
-      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
+      const okCity  = selectedCity ? r.market?.city === selectedCity : true;
+      const okStore = selectedStore ? r.market?.store === selectedStore : true;
       const okStatus = selectedStatus ? r.daily_status === selectedStatus : true;
-      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
+      const okTL   = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
       return okRegion && okCity && okStore && okStatus && okTL;
     });
   }, [pending, selectedRegion, selectedCity, selectedStore, selectedStatus, selectedTL]);
@@ -440,10 +440,10 @@ export default function VisitRequestsPage() {
   const filteredHistory = useMemo(() => {
     return history.filter(r => {
       const okRegion = selectedRegion ? r.market?.region === selectedRegion : true;
-      const okCity   = selectedCity ? r.market?.city === selectedCity : true;
-      const okStore  = selectedStore ? r.market?.store === selectedStore : true;
+      const okCity  = selectedCity ? r.market?.city === selectedCity : true;
+      const okStore = selectedStore ? r.market?.store === selectedStore : true;
       const okStatus = selectedStatus ? r.daily_status === selectedStatus : true;
-      const okTL     = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
+      const okTL   = selectedTL ? r.requester?.team_leader_id === selectedTL : true;
       return okRegion && okCity && okStore && okStatus && okTL;
     });
   }, [history, selectedRegion, selectedCity, selectedStore, selectedStatus, selectedTL]);

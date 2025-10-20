@@ -1,14 +1,16 @@
-// app/layout.tsx
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
-import GlobalHeader from "@/components/GlobalHeader"; 
+import GlobalHeader from "@/components/GlobalHeader";
 import ResponsiveContainer from "@/components/ResponsiveContainer";
+import { UserProvider } from "@/context/UserContext";
+import { FilterProvider } from "@/context/FilterContext"; // 1. استيراد مزوّد الفلاتر
+import SettingsInitializer from "@/context/SettingsInitializer"; // 2. استيراد مكون الربط
 
-/* ===== Local Geist fonts (Arabic + base fallback) ===== */
+/* ... (تعريف الخطوط يبقى كما هو) ... */
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -19,8 +21,6 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   weight: "100 900",
 });
-
-/* ===== Modern English font (Google) ===== */
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -39,8 +39,8 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
+      {/* ... (قسم الـ head يبقى كما هو) ... */}
       <head>
-        {/* يطبّق اللغة/الثيم قبل الـ hydration لتفادي أي mismatch */}
         <Script id="boot-lang-theme" strategy="beforeInteractive">
           {`
             try {
@@ -58,20 +58,27 @@ export default function RootLayout({
       </head>
 
       <body
-  className={`
-    ${geistSans.variable}
-    ${geistMono.variable}
-    ${jakarta.variable}
-    antialiased
-  `}
->
-  <ToastProvider>
-    <GlobalHeader />
-    <ResponsiveContainer>
-      <main>{children}</main>
-    </ResponsiveContainer>
-  </ToastProvider>
-</body>
+        className={`
+          ${geistSans.variable}
+          ${geistMono.variable}
+          ${jakarta.variable}
+          antialiased
+        `}
+      >
+        <ToastProvider>
+          <UserProvider>
+            <FilterProvider>
+              {/* 3. ضع مكون الربط هنا */}
+              <SettingsInitializer />
+
+              <GlobalHeader />
+              <ResponsiveContainer>
+                <main>{children}</main>
+              </ResponsiveContainer>
+            </FilterProvider>
+          </UserProvider>
+        </ToastProvider>
+      </body>
     </html>
   );
 }

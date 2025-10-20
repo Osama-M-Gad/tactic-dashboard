@@ -47,7 +47,6 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Reset Password Modal
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetMsg, setResetMsg] = useState("");
@@ -75,20 +74,17 @@ export default function LoginPage() {
     }
   }
 
-  // ✅ لفّ routeByRole علشان ESLint deps
   const routeByRole = useCallback((user: PortalUser) => {
     const role = String(user?.role || "").toLowerCase();
     if (role === "super_admin") router.replace("/super-admin/dashboard");
     else if (role === "admin") router.replace("/admin/dashboard");
   }, [router]);
 
-  // ✅ Auto-redirect بدون أي refresh
   useEffect(() => {
     const stored = getStoredUser();
     if (stored) routeByRole(stored);
   }, [routeByRole]);
 
-  // Sync remember (username + flag)
   useEffect(() => {
     try {
       const remembered = localStorage.getItem("rememberedUsername");
@@ -111,7 +107,7 @@ export default function LoginPage() {
   }, [rememberMe, username]);
 
   const handleLogin = async () => {
-    if (loading) return; // حارس ضد الضغط المتكرر
+    if (loading) return;
     setErrorMsg("");
     setLoading(true);
     let success = false;
@@ -125,6 +121,7 @@ export default function LoginPage() {
 
       if (uErr || !user) {
         setErrorMsg(TEXT.wrong);
+        setLoading(false);
         return;
       }
 
@@ -133,6 +130,7 @@ export default function LoginPage() {
       const isAdmin = role === "admin";
       if (!isSuper && !isAdmin) {
         setErrorMsg(TEXT.forbidden);
+        setLoading(false);
         return;
       }
 
@@ -145,15 +143,11 @@ export default function LoginPage() {
         if (!sInErr && sIn?.user) {
           signedIn = true;
           authUserId = sIn.user.id;
-        } else {
-          setErrorMsg(TEXT.wrong);
-          return;
         }
       } else {
         const tablePwd = typeof user.password === "string" ? user.password : "";
         if (tablePwd && password && tablePwd === password) {
           signedIn = true;
-
           if (email) {
             try {
               const { data: sIn2, error: sInErr2 } = await supabase.auth.signInWithPassword({ email, password });
@@ -163,24 +157,18 @@ export default function LoginPage() {
                 if (sUp?.user && !sUpErr) authUserId = sUp.user.id;
               }
               if (authUserId) {
-                const { error: rpcErr } = await supabase.rpc("link_auth_user", {
-                  p_user_id: user.id,
-                  p_auth_user_id: authUserId,
-                });
-                if (rpcErr) console.warn("[AUTH-LINK] rpc error:", rpcErr);
+                await supabase.rpc("link_auth_user", { p_user_id: user.id, p_auth_user_id: authUserId });
               }
             } catch (linkErr) {
               console.warn("[AUTH-LINK] unexpected:", linkErr);
             }
           }
-        } else {
-          setErrorMsg(TEXT.wrong);
-          return;
         }
       }
 
       if (!signedIn) {
         setErrorMsg(TEXT.wrong);
+        setLoading(false);
         return;
       }
 
@@ -196,17 +184,12 @@ export default function LoginPage() {
       storage.setItem("currentUser", JSON.stringify(safeUser));
       storage.setItem("rememberMe", rememberMe ? "1" : "0");
 
-      // داخل handleLogin مكان السطر القديم
-let sessionKey: string;
-if (
-  typeof globalThis !== "undefined" &&
-  typeof globalThis.crypto !== "undefined" &&
-  typeof globalThis.crypto.randomUUID === "function"
-) {
-  sessionKey = globalThis.crypto.randomUUID();
-} else {
-  sessionKey = uuidv4();
-}
+      let sessionKey: string;
+      if (typeof globalThis?.crypto?.randomUUID === "function") {
+        sessionKey = globalThis.crypto.randomUUID();
+      } else {
+        sessionKey = uuidv4();
+      }
       await supabase.from("user_sessions").insert({
         user_id: user.id,
         session_key: sessionKey,
@@ -214,32 +197,61 @@ if (
         app_version: "portal-v1",
       });
       storage.setItem("session_key", sessionKey);
-
+      
       if (rememberMe) {
         try { localStorage.setItem("rememberedUsername", username.trim()); } catch {}
       }
 
+      // =============================================================
+      // START: جلب وحفظ فلاتر المستخدم (المحدثة لتشمل default_city)
+      // =============================================================
+      try {
+        // نطلب كل الأعمدة الجديدة
+        const { data: settings, error: settingsError } = await supabase
+.from('user_settings')
+.select('*') 
+.eq('user_id', user.id)
+.single();
+
+        if (settingsError && settingsError.code !== 'PGRST116') {
+          throw settingsError;
+        }
+        
+        if (settings) {
+          console.log('User settings fetched from DB:', settings);
+          localStorage.setItem('userFilters', JSON.stringify(settings));
+        } else {
+          localStorage.removeItem('userFilters');
+        }
+      } catch (filterError) {
+        console.error("Error fetching user settings, proceeding without filters:", filterError);
+        localStorage.removeItem('userFilters');
+      }
+      // =============================================================
+      // END: نهاية كود الفلاتر
+      // =============================================================
+
       const target = isSuper ? "/super-admin/dashboard" : "/admin/dashboard";
       success = true;
-      router.push(target); // هنسيب loading=true لحد الانتقال (unmount)
+      router.push(target);
       return;
+
     } catch (e) {
       console.error(e);
+      setErrorMsg("An unexpected error occurred.");
     } finally {
-      if (!success) setLoading(false); // في الفشل فقط نعيد تفعيل الزر
+      if (!success) setLoading(false);
     }
   };
 
   const handleResetPassword = async () => {
     setResetMsg("");
     const email = resetEmail.trim();
-
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
       setResetMsg(isArabic ? "صيغة البريد غير صحيحة" : "Invalid email format");
       return;
     }
-
     setResetLoading(true);
     try {
       const { data: u, error: uErr } = await supabase
@@ -270,122 +282,74 @@ if (
     if (e.key === "Enter") handleLogin();
   };
 
-  const LOGO =
-    "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
+  const LOGO = "https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/logo.png";
 
   return (
     <div style={{ minHeight: "100dvh", position: "relative" }}>
-      {/* خلفية ملء الشاشة */}
       <div
         aria-hidden
         style={{
-          position: "fixed",
-          inset: 0,
-          width: "100vw",
-          height: "100vh",
-          backgroundImage:
-            "url('https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          zIndex: 0,
-          transform: "translateZ(0)",
+          position: "fixed", inset: 0, width: "100vw", height: "100vh",
+          backgroundImage: "url('https://sygnesgnnaoadhrzacmp.supabase.co/storage/v1/object/public/public-files/bg.jpg')",
+          backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat",
+          zIndex: 0, transform: "translateZ(0)",
         }}
       />
-      {/* طبقة تعتيم حسب الثيم */}
       <div
         aria-hidden
         style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 1,
+          position: "fixed", inset: 0, zIndex: 1,
           background: isDark ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.25)",
           backdropFilter: "blur(1px)",
         }}
       />
-
-      {/* Body */}
       <div
         style={{
-          position: "relative",
-          zIndex: 2,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100dvh",
-          padding: "24px 12px",
+          position: "relative", zIndex: 2, display: "flex", justifyContent: "center",
+          alignItems: "center", minHeight: "100dvh", padding: "24px 12px",
         }}
       >
         <div
           style={{
             backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(255,255,255,0.9)",
-            padding: "2rem",
-            borderRadius: "8px",
-            width: "min(350px, 92vw)",
-            textAlign: "center",
-            color: isDark ? "#fff" : "#000",
+            padding: "2rem", borderRadius: "8px", width: "min(350px, 92vw)",
+            textAlign: "center", color: isDark ? "#fff" : "#000",
             border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
             boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
           }}
         >
           <Image
-            src={LOGO}
-            alt="Tactic Logo"
-            width={200}
-            height={80}
+            src={LOGO} alt="Tactic Logo" width={200} height={80}
             style={{ width: "200px", margin: "0 auto 20px auto", display: "block" }}
             unoptimized
           />
-
           <h2 style={{ marginBottom: "1rem", whiteSpace: "pre-line" }} suppressHydrationWarning>
-            {mounted
-              ? (isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in")
-              : "Welcome Back\nKindly log in"}
+            {mounted ? (isArabic ? "أهلاً بعودتك\nيرجى تسجيل الدخول" : "Welcome Back\nKindly log in") : "Welcome Back\nKindly log in"}
           </h2>
-
-          {/* Username */}
           <input
             type="text"
             placeholder={isArabic ? "اسم المستخدم" : "User Name"}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={onKeyDown}
+            value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onKeyDown}
             disabled={loading}
             style={{
-              display: "block",
-              width: "100%",
-              padding: "10px",
-              marginBottom: "1rem",
-              borderRadius: "6px",
-              border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
-              background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
-              color: isDark ? "#fff" : "#111",
-              outline: "none",
-              opacity: loading ? 0.7 : 1,
+              display: "block", width: "100%", padding: "10px", marginBottom: "1rem",
+              borderRadius: "6px", border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
+              background: isDark ? "rgba(255,255,255,0.08)" : "#fff", color: isDark ? "#fff" : "#111",
+              outline: "none", opacity: loading ? 0.7 : 1,
             }}
             autoComplete="username"
           />
-
-          {/* Password + Eye */}
           <div style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
             <input
-              ref={passwordInputRef}
-              type={showPassword ? "text" : "password"}
+              ref={passwordInputRef} type={showPassword ? "text" : "password"}
               placeholder={isArabic ? "كلمة المرور" : "Password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={onKeyDown}
+              value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onKeyDown}
               disabled={loading}
               style={{
-                display: "block",
-                width: "100%",
-                padding: "10px 44px 10px 12px",
-                borderRadius: "6px",
-                border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
-                background: isDark ? "rgba(255,255,255,0.08)" : "#fff",
-                color: isDark ? "#fff" : "#111",
-                outline: "none",
-                opacity: loading ? 0.7 : 1,
+                display: "block", width: "100%", padding: "10px 44px 10px 12px",
+                borderRadius: "6px", border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(0,0,0,0.15)",
+                background: isDark ? "rgba(255,255,255,0.08)" : "#fff", color: isDark ? "#fff" : "#111",
+                outline: "none", opacity: loading ? 0.7 : 1,
               }}
               autoComplete="current-password"
             />
@@ -400,19 +364,10 @@ if (
               title={showPassword ? (isArabic ? "إخفاء" : "Hide") : (isArabic ? "إظهار" : "Show")}
               disabled={loading}
               style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: loading ? "not-allowed" : "pointer",
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isDark ? "#d1d5db" : "#666",
-                opacity: loading ? 0.6 : 1,
+                position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                border: "none", background: "transparent", cursor: loading ? "not-allowed" : "pointer", padding: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: isDark ? "#d1d5db" : "#666", opacity: loading ? 0.6 : 1,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#f5a623")}
               onMouseLeave={(e) => (e.currentTarget.style.color = isDark ? "#d1d5db" : "#666")}
@@ -420,58 +375,37 @@ if (
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
-
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-              fontSize: "0.9rem",
-              color: isDark ? "#fff" : "#000",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              marginBottom: "1rem", fontSize: "0.9rem", color: isDark ? "#fff" : "#000",
             }}
           >
             <label style={{ display: "flex", alignItems: "center", gap: 6, opacity: loading ? 0.7 : 1 }}>
               <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
                 disabled={loading}
               />
               {isArabic ? "تذكرني" : "Remember me"}
             </label>
             <a
               href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                if (!loading) setShowResetModal(true);
-              }}
+              onClick={(e) => { e.preventDefault(); if (!loading) setShowResetModal(true); }}
               style={{
-                color: "#f5a623",
-                textDecoration: "none",
-                pointerEvents: loading ? "none" : "auto",
-                opacity: loading ? 0.6 : 1,
+                color: "#f5a623", textDecoration: "none",
+                pointerEvents: loading ? "none" : "auto", opacity: loading ? 0.6 : 1,
               }}
             >
               {isArabic ? "نسيت كلمة المرور؟" : "Forget Password?"}
             </a>
           </div>
-
           {errorMsg && <p style={{ color: "red", marginBottom: "1rem" }}>{errorMsg}</p>}
-
           <button
-            type="button"
-            onClick={handleLogin}
-            disabled={loading}
+            type="button" onClick={handleLogin} disabled={loading}
             style={{
-              backgroundColor: "#f5a623",
-              color: "#000",
-              padding: "10px",
-              width: "100%",
-              border: "none",
-              borderRadius: "4px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
+              backgroundColor: isDark ? "#f5a623" : "#e09a1e", color: "#000", padding: "10px",
+              width: "100%", border: "none", borderRadius: "4px",
+              fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.6 : 1,
             }}
           >
@@ -479,103 +413,59 @@ if (
           </button>
         </div>
       </div>
-
-      {/* Reset Password Modal */}
       {showResetModal && (
         <div
           style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 50,
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+            display: "flex", justifyContent: "center", alignItems: "center", zIndex: 50,
           }}
-          role="dialog"
-          aria-modal="true"
+          role="dialog" aria-modal="true"
         >
           <div
             style={{
-              background: "#111",
-              color: "#fff",
-              padding: 20,
-              borderRadius: 8,
-              width: 360,
-              boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              textAlign: "center",
+              background: "#111", color: "#fff", padding: 20, borderRadius: 8,
+              width: 360, boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+              border: "1px solid rgba(255,255,255,0.08)", textAlign: "center",
             }}
           >
             <h3 style={{ marginBottom: 12 }}>
               {isArabic ? "إعادة تعيين كلمة المرور" : "Reset Password"}
             </h3>
-
             <input
-              type="email"
-              placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
-              value={resetEmail}
-              onChange={(e) => setResetEmail(e.target.value)}
-              disabled={resetLoading}
+              type="email" placeholder={isArabic ? "أدخل بريدك" : "Enter your email"}
+              value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} disabled={resetLoading}
               style={{
-                width: "100%",
-                padding: "10px 12px",
-                margin: "10px 0 6px",
-                borderRadius: 6,
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
-                outline: "none",
-                opacity: resetLoading ? 0.7 : 1,
+                width: "100%", padding: "10px 12px", margin: "10px 0 6px",
+                borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)", color: "#fff",
+                outline: "none", opacity: resetLoading ? 0.7 : 1,
               }}
             />
-
             {resetMsg && (
-              <p
-                style={{
-                  margin: "6px 0 10px",
-                  fontSize: "0.9rem",
+              <p style={{
+                  margin: "6px 0 10px", fontSize: "0.9rem",
                   color: resetMsg.includes("sent") || resetMsg.includes("تم") ? "#22c55e" : "#ef4444",
                 }}
               >
                 {resetMsg}
               </p>
             )}
-
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
               <button
-                onClick={handleResetPassword}
-                disabled={resetLoading}
+                onClick={handleResetPassword} disabled={resetLoading}
                 style={{
-                  flex: 1,
-                  background: "#f5a623",
-                  color: "#000",
-                  border: "none",
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  fontWeight: "bold",
-                  cursor: resetLoading ? "not-allowed" : "pointer",
-                  opacity: resetLoading ? 0.7 : 1,
+                  flex: 1, background: "#f5a623", color: "#000", border: "none",
+                  padding: "10px 0", borderRadius: 6, fontWeight: "bold",
+                  cursor: resetLoading ? "not-allowed" : "pointer", opacity: resetLoading ? 0.7 : 1,
                 }}
               >
                 {resetLoading ? (isArabic ? "جارٍ الإرسال..." : "Sending...") : (isArabic ? "إرسال" : "Send")}
               </button>
-
               <button
-                onClick={() => {
-                  setShowResetModal(false);
-                  setResetEmail("");
-                  setResetMsg("");
-                }}
+                onClick={() => { setShowResetModal(false); setResetEmail(""); setResetMsg(""); }}
                 style={{
-                  flex: 1,
-                  background: "#ef4444",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  fontWeight: "bold",
-                  cursor: "pointer",
+                  flex: 1, background: "#ef4444", color: "#fff", border: "none",
+                  padding: "10px 0", borderRadius: 6, fontWeight: "bold", cursor: "pointer",
                 }}
               >
                 {isArabic ? "إلغاء" : "Cancel"}

@@ -9,6 +9,7 @@ import "react-circular-progressbar/dist/styles.css";
 import { useLangTheme } from "@/hooks/useLangTheme";
 import SupaImg from "@/components/SupaImg";
 
+
 /* ========= Supabase ===== */
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -81,7 +82,8 @@ type Stats = {
   ended: number;
   pending: number;
   finished_pct: number;
-  average_ms_completed: number;
+  total_visit_ms: number;
+  total_transit_ms: number;
 };
 
 type CountCard = { key: string; label: string; value: number | string; pct: number; mode: "count" };
@@ -156,6 +158,34 @@ function userDisplay(u: Pick<UserLite,"username"|"name"|"arabic_name"> | null | 
   const disp = (isAr ? u.arabic_name : u.name) || u.username;
   return disp || (isAr ? "غير معروف" : "Unknown");
 }
+// ✅ مفتاح تجميع للسوق
+function marketKey(r: SnapshotRow) {
+  const m = r.market;
+  if (m?.id) return `id:${m.id}`;
+  return `sbcr:${m?.store ?? ""}|${m?.branch ?? ""}|${m?.city ?? ""}|${m?.region ?? ""}`;
+}
+
+// ✅ نختار سجل واحد فقط لكل سوق
+function pickBest(list: SnapshotRow[], rowStatus: (r: SnapshotRow) => string, isAr: boolean) {
+  const S_FIN = isAr ? "مكتملة" : "Finished";
+  const S_END = isAr ? "منتهية" : "Ended";
+  const S_PEN = isAr ? "معلقة" : "Pending";
+
+  const withStat = list.map(r => ({ r, s: rowStatus(r) }));
+  const finished = withStat.filter(x => x.s === S_FIN);
+  const ended    = withStat.filter(x => x.s === S_END);
+  const pending  = withStat.filter(x => x.s === S_PEN);
+  const candidate = finished.length ? finished : (ended.length ? ended : pending);
+  if (!candidate.length) return null;
+
+  const best = candidate.reduce((a, b) => {
+    const ta = new Date(a.r.finished_at ?? a.r.started_at ?? 0).getTime();
+    const tb = new Date(b.r.finished_at ?? b.r.started_at ?? 0).getTime();
+    return tb > ta ? b : a;
+  });
+
+  return best.r;
+}
 
 /* ========= Page ========= */
 export default function YesterdayVisitsPage() {
@@ -165,6 +195,10 @@ export default function YesterdayVisitsPage() {
 
   const [booting, setBooting] = useState(true);
   const [clientId, setClientId] = useState<UUID | null>(null);
+
+  // NEW: أرقام أمس
+  const [visitSeconds, setVisitSeconds] = useState<number>(0);
+  const [transitSeconds, setTransitSeconds] = useState<number>(0);
 
   const [viewer, setViewer] = useState<{ open: boolean; imgs: string[]; index: number; title?: string }>({
     open: false, imgs: [], index: 0, title: "",
@@ -245,7 +279,7 @@ export default function YesterdayVisitsPage() {
       end_reason_ar: r.end_reason_ar,
       end_reason_en: r.end_reason_en,
       end_visit_photo: r.end_visit_photo,
-      jp_state: r.jp_state ?? null, // ⬅️ نحاول نقرأها من الـ RPC
+      jp_state: r.jp_state ?? null,
 
       user_id: r.user_id || "",
       market_id: r.market_id || "",
@@ -277,12 +311,10 @@ export default function YesterdayVisitsPage() {
     return isAr ? "معلقة" : "Pending";
   }, [isAr]);
 
- // ❶ الأفضل: اعتمد على الـ DB أولاً، ولو مارجعش قيمة اعرض IN JP كـ default
-const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
-  if (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") return r.jp_state;
-  // TODO: لو محتاج منطق أدقّ، خليه في الـ RPC عشان يكون مصدر الحقيقة.
-  return "IN JP";
-}, []);
+  const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
+    if (r.jp_state === "IN JP" || r.jp_state === "OUT OF JP") return r.jp_state;
+    return "IN JP";
+  }, []);
 
   const hydrateFilters = useCallback(() => {
     const rset = new Set<string>(), cset = new Set<string>(), sset = new Set<string>();
@@ -300,21 +332,149 @@ const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
     setTeamLeaders(Array.from(tlset.values()));
   }, [rows]);
 
+  /* ========= أمس: presence/visit/transit ========= */
+  type MarketLite = { id: string; region?: string | null; city?: string | null; store?: string | null };
+  type UserTL = { id: string; team_leader_id: string | null };
+
+  const fetchTransitForYesterday = useCallback(async () => {
+    if (!clientId) { setVisitSeconds(0); setTransitSeconds(0); return; }
+    const day = yesterday; // YYYY-MM-DD Riyadh
+
+    // 1) presence per user (dedup + clamp)
+    let pres = 0;
+    {
+      let q = supabase
+        .from("v_presence_visit_unified")
+        .select("user_id, presence_for_sum, region, city, store, team_leader_id")
+        .eq("client_id", clientId)
+        .eq("snapshot_date", day);
+
+      if (selectedRegion) q = q.eq("region", selectedRegion);
+      if (selectedCity)   q = q.eq("city", selectedCity);
+      if (selectedStore)  q = q.eq("store", selectedStore);
+      if (selectedTL)     q = q.eq("team_leader_id", selectedTL);
+
+      const byUser = new Map<string, number>();
+      const pageSize = 1000; let from = 0, to = pageSize - 1;
+      while (true) {
+        const { data, error } = await q.range(from, to);
+        if (error) { console.error("[presence yesterday] error:", error); break; }
+        const rows = (data ?? []) as Array<{ user_id: string | null; presence_for_sum: number | null }>;
+        for (const r of rows) {
+          const uid = r.user_id ? String(r.user_id) : "";
+          if (!uid) continue;
+          const secs = Math.max(0, Math.min(86400, Number(r.presence_for_sum || 0)));
+          const prev = byUser.get(uid) ?? 0;
+          if (secs > prev) byUser.set(uid, secs);
+        }
+        if (!rows.length || rows.length < pageSize) break;
+        from += pageSize; to += pageSize;
+      }
+      pres = Array.from(byUser.values()).reduce((a, b) => a + b, 0);
+    }
+
+    // 2) visit seconds (complete visits yesterday)
+    let visit = 0;
+    {
+      const q = supabase
+        .from("DailyVisitSnapshots")
+        .select("user_id, market_id, started_at, finished_at")
+        .eq("client_id", clientId)
+        .eq("snapshot_date", day)
+        .not("started_at", "is", null)
+        .not("finished_at", "is", null);
+
+      const needMarketFilter = !!(selectedRegion || selectedCity || selectedStore);
+      const marketsById: Record<string, MarketLite> = {};
+      if (needMarketFilter) {
+        const { data: mData } = await supabase
+          .from("Markets")
+          .select("id, region, city, store");
+        for (const m of (mData ?? []) as MarketLite[]) {
+          marketsById[String(m.id)] = m;
+        }
+      }
+
+      const userTL: Record<string, string | null> = {};
+      if (selectedTL) {
+        const { data: uData } = await supabase.from("Users").select("id, team_leader_id");
+        for (const u of (uData ?? []) as UserTL[]) {
+          userTL[String(u.id)] = u.team_leader_id ? String(u.team_leader_id) : null;
+        }
+      }
+
+      const pageSize = 1000; let from = 0, to = pageSize - 1;
+      while (true) {
+        const { data, error } = await q.range(from, to);
+        if (error) { console.error("[visits yesterday] error:", error); break; }
+        const rows = (data ?? []) as Array<{ user_id: string | null; market_id: string | null; started_at: string; finished_at: string }>;
+        for (const r of rows) {
+          if (selectedTL) {
+            const tl = userTL[String(r.user_id)] || null;
+            if (tl !== selectedTL) continue;
+          }
+          if (needMarketFilter) {
+            const m = r.market_id ? marketsById[String(r.market_id)] : undefined;
+            if (!m) continue;
+            if (selectedRegion && m.region !== selectedRegion) continue;
+            if (selectedCity   && m.city   !== selectedCity)   continue;
+            if (selectedStore  && m.store  !== selectedStore)  continue;
+          }
+          const start = new Date(r.started_at).getTime();
+          const end   = new Date(r.finished_at).getTime();
+          visit += Math.max(0, Math.floor((end - start) / 1000));
+        }
+        if (!rows.length || rows.length < pageSize) break;
+        from += pageSize; to += pageSize;
+      }
+    }
+
+    // 3) transit
+    const transit = Math.max(0, pres - visit);
+    setVisitSeconds(visit);
+    setTransitSeconds(transit);
+  }, [clientId, yesterday, selectedRegion, selectedCity, selectedStore, selectedTL]);
+
   useEffect(() => { if (!clientId) return; fetchTable(); }, [clientId, fetchTable]);
+
+  // أمس presence/visit/transit
+  useEffect(() => {
+    if (!clientId) return;
+    void fetchTransitForYesterday();
+  }, [clientId, yesterday, selectedRegion, selectedCity, selectedStore, selectedTL, fetchTransitForYesterday]);
+
   useEffect(() => { hydrateFilters(); }, [rows, hydrateFilters]);
 
+  // ✅ نجمع الصفوف على مستوى السوق ونختار واحد فقط لكل سوق حسب القاعدة
+  const collapsedRows = useMemo(() => {
+    const groups = new Map<string, SnapshotRow[]>();
+    for (const r of rows) {
+      const k = marketKey(r);
+      if (!k) continue;
+      const arr = groups.get(k) ?? [];
+      arr.push(r);
+      groups.set(k, arr);
+    }
+    const out: SnapshotRow[] = [];
+    for (const [, list] of groups) {
+      const best = pickBest(list, rowStatus, isAr);
+      if (best) out.push(best);
+    }
+    return out;
+  }, [rows, rowStatus, isAr]);
+
   const filteredRows = useMemo(() => {
-    return rows.filter((r) => {
-      const okR = selectedRegion ? r.market?.region === selectedRegion : true;
-      const okC = selectedCity ? r.market?.city === selectedCity : true;
-      const okS = selectedStore ? r.market?.store === selectedStore : true;
+    return collapsedRows.filter((r) => {
+      const okR  = selectedRegion ? r.market?.region === selectedRegion : true;
+      const okC  = selectedCity ? r.market?.city === selectedCity : true;
+      const okS  = selectedStore ? r.market?.store === selectedStore : true;
       const okTL = selectedTL ? r.user?.team_leader_id === selectedTL : true;
-      const okStatus = selectedStatus ? rowStatus(r) === selectedStatus : true;
-      const jp = rowJP(r);
+      const okSt = selectedStatus ? rowStatus(r) === selectedStatus : true;
+      const jp   = rowJP(r);
       const okJP = selectedJP ? jp === selectedJP : true;
-      return okR && okC && okS && okTL && okStatus && okJP;
+      return okR && okC && okS && okTL && okSt && okJP;
     });
-  }, [rows, selectedRegion, selectedCity, selectedStore, selectedTL, selectedStatus, selectedJP, rowStatus, rowJP]);
+  }, [collapsedRows, selectedRegion, selectedCity, selectedStore, selectedTL, selectedStatus, selectedJP, rowStatus, rowJP]);
 
   const rowDurationMs = (r: SnapshotRow) => {
     if (!(r.started_at && r.finished_at)) return 0;
@@ -323,24 +483,62 @@ const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
     return Math.max(0, end - start);
   };
 
-  const stats: Stats = useMemo(() => {
-    const total = filteredRows.length;
-    const ended = filteredRows.filter((r) => (r.end_reason_ar || r.end_reason_en)?.toString().trim().length).length;
-    const finishedRows = filteredRows.filter((r) => !(r.end_reason_ar || r.end_reason_en) && r.started_at && r.finished_at);
-    const finished = finishedRows.length;
-    const pending = total - ended - finished;
-    const sumMs = finishedRows.reduce((acc, r) => acc + rowDurationMs(r), 0);
-    const average_ms_completed = finished ? Math.floor(sumMs / finished) : 0;
-    return { total, finished, ended, pending, finished_pct: total ? (finished / total) * 100 : 0, average_ms_completed };
-  }, [filteredRows]);
+  const matchAllFilters = useCallback((r: SnapshotRow) => {
+    const okR  = selectedRegion ? r.market?.region === selectedRegion : true;
+    const okC  = selectedCity ? r.market?.city === selectedCity : true;
+    const okS  = selectedStore ? r.market?.store === selectedStore : true;
+    const okTL = selectedTL ? r.user?.team_leader_id === selectedTL : true;
+    const okSt = selectedStatus ? rowStatus(r) === selectedStatus : true;
+    const jp   = rowJP(r);
+    const okJP = selectedJP ? jp === selectedJP : true;
+    return okR && okC && okS && okTL && okSt && okJP;
+  }, [selectedRegion, selectedCity, selectedStore, selectedTL, selectedStatus, selectedJP, rowStatus, rowJP]);
 
-  const cards: Card[] = useMemo(() => ([
-    { key: "total", label: isAr ? "إجمالي الزيارات" : "Total Visits", value: stats.total, pct: 100, mode: "count" },
-    { key: "finished", label: isAr ? "المكتملة" : "Finished", value: stats.finished, pct: stats.total ? (stats.finished / stats.total) * 100 : 0, mode: "count" },
-    { key: "ended", label: isAr ? "المنتهية" : "Ended", value: stats.ended, pct: stats.total ? (stats.ended / stats.total) * 100 : 0, mode: "count" },
-    { key: "pending", label: isAr ? "غير المكتملة" : "Pending", value: stats.pending, pct: stats.total ? (stats.pending / stats.total) * 100 : 0, mode: "count" },
-    { key: "avg", label: isAr ? "متوسط مدة المكتملة" : "Avg Duration (Finished)", value: msToClock(stats.average_ms_completed), pct: 100, mode: "text" },
-  ]), [stats, isAr]);
+  const stats: Stats = useMemo(() => {
+    const rowsFilteredAll = rows.filter(matchAllFilters);
+
+    const total = rowsFilteredAll.length;
+    const ended = rowsFilteredAll.filter((r) =>
+      (r.end_reason_ar || r.end_reason_en)?.toString().trim().length).length;
+
+    const finishedRows = rowsFilteredAll.filter(
+      (r) => !(r.end_reason_ar || r.end_reason_en) && r.started_at && r.finished_at
+    );
+
+    const finished = finishedRows.length;
+    const pending  = total - ended - finished;
+
+    // نستخدم visit/transit (seconds) المحسوبين لأمس
+    const total_visit_ms   = visitSeconds  * 1000;
+    const total_transit_ms = transitSeconds * 1000;
+
+    return {
+      total,
+      finished,
+      ended,
+      pending,
+      finished_pct: total ? (finished / total) * 100 : 0,
+      total_visit_ms,
+      total_transit_ms,
+    };
+  }, [rows, matchAllFilters, visitSeconds, transitSeconds]);
+
+  const cards: Card[] = useMemo(() => [
+    { key: "total",    label: isAr ? "إجمالي الزيارات" : "Total Visits",
+      value: stats.total,    pct: 100, mode: "count" },
+    { key: "finished", label: isAr ? "المكتملة" : "Finished",
+      value: stats.finished, pct: stats.total ? (stats.finished / stats.total) * 100 : 0, mode: "count" },
+    { key: "ended",    label: isAr ? "المنتهية" : "Ended",
+      value: stats.ended,    pct: stats.total ? (stats.ended / stats.total) * 100 : 0, mode: "count" },
+    { key: "pending",  label: isAr ? "غير المكتملة" : "Pending",
+      value: stats.pending,  pct: stats.total ? (stats.pending / stats.total) * 100 : 0, mode: "count" },
+
+    { key: "visit_sum", label: isAr ? "إجمالي وقت الزيارة" : "Total Visit Time",
+      value: msToClock(stats.total_visit_ms), pct: 100, mode: "text" },
+
+    { key: "transit_sum", label: isAr ? "إجمالي وقت التنقل" : "Total Travel Time",
+      value: msToClock(stats.total_transit_ms), pct: 100, mode: "text" },
+  ], [stats, isAr]);
 
   const primaryBtnStyle: React.CSSProperties = {
     backgroundColor: "var(--accent)", color: "var(--accent-foreground)", padding: "8px 12px",
@@ -351,22 +549,41 @@ const rowJP = useCallback((r: SnapshotRow): "IN JP" | "OUT OF JP" => {
     border: "1px solid var(--divider)", borderRadius: 9999, padding: 6, whiteSpace: "nowrap",
   };
   const itemShell: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 6, background: "var(--input-bg)",
-    border: "1px solid var(--input-border)", borderRadius: 9999, padding: "6px 10px", whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    background: "var(--input-bg)",
+    border: "1px solid var(--input-border)",
+    borderRadius: 9999,
+    padding: "4px 8px",
+    whiteSpace: "nowrap",
   };
+
   const itemLabel: React.CSSProperties = { fontSize: 12, color: "var(--muted)" };
   const baseField: React.CSSProperties = {
-    border: "none", outline: "none", backgroundColor: "transparent", color: "var(--input-text)",
-    fontSize: 13, minWidth: 110, appearance: "none",
+    border: "none",
+    outline: "none",
+    backgroundColor: "transparent",
+    color: "var(--input-text)",
+    fontSize: 12,
+    minWidth: 80,
+    appearance: "none",
   };
-  const capsuleSelect: React.CSSProperties = { ...baseField, paddingInlineEnd: 14 };
+
+  const capsuleSelect: React.CSSProperties = {
+    ...baseField,
+    paddingInlineEnd: 10,
+    paddingInlineStart: 2,
+    maxWidth: 90,
+  };
+
   const thStyle: React.CSSProperties = {
-  textAlign: "center",
-  padding: "10px 10px",      // كان 12px
-  fontWeight: 800,
-  borderBottom: "1px solid var(--divider)",
-};
-const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px" }; // كان 12px
+    textAlign: "center",
+    padding: "10px 10px",
+    fontWeight: 800,
+    borderBottom: "1px solid var(--divider)",
+  };
+  const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px" };
 
   const tdCenterMuted: React.CSSProperties = { textAlign: "center", padding: 20, color: "var(--muted)" };
   const modalOverlayStyle: React.CSSProperties = {
@@ -426,19 +643,15 @@ const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px"
                 </select>
               </div>
 
-              {/* فلتر JP */}
+              {/* JP */}
               <div style={itemShell}>
                 <span style={itemLabel}>{isAr ? "رحلة العمل" : "JP State"}</span>
                 <span style={{ fontSize: 10, opacity: 0.7, marginInlineStart: 2 }}>▾</span>
-               <select
-  value={selectedJP}
-  onChange={(e) => {
-    const v = e.target.value;
-    if (isJPStateFilter(v)) setSelectedJP(v);
-  }}
-  style={capsuleSelect}
->
-
+                <select
+                  value={selectedJP}
+                  onChange={(e) => { const v = e.target.value; if (isJPStateFilter(v)) setSelectedJP(v); }}
+                  style={capsuleSelect}
+                >
                   <option value="">{isAr ? "الكل" : "All"}</option>
                   <option value="IN JP">IN JP</option>
                   <option value="OUT OF JP">OUT OF JP</option>
@@ -522,37 +735,64 @@ const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px"
       </div>
 
       {/* Cards */}
-      <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
-        {cards.map((c) => (
-          <div key={c.key} style={{ width: 200, background: "var(--card)", border: "1px solid var(--divider)", borderRadius: 12, padding: 14, textAlign: "center" }}>
-            <div style={{ width: 110, height: 110, margin: "0 auto", display: "grid", placeItems: "center" }}>
-              {c.mode === "count" ? (
-                <CircularProgressbar
-                  value={c.pct}
-                  text={`${c.value}`}
-                  styles={buildStyles({ textColor: "var(--text)", pathColor: "var(--accent)", trailColor: "var(--chip-bg)" })}
-                />
-              ) : (
-                <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text)" }}>{c.value}</div>
-              )}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+        {(() => {
+          const count = cards.length;
+          const gap = 12;
+          const basis = `calc((100% - ${gap * (count - 1)}px) / ${count})`;
+          return (
+            <div style={{ width: "min(1100px, 94vw)", display: "flex", gap, flexWrap: "nowrap" }}>
+              {cards.map((c) => (
+                <div
+                  key={c.key}
+                  style={{
+                    flex: `0 0 ${basis}`,
+                    maxWidth: 180,
+                    minWidth: 120,
+                    background: "var(--card)",
+                    border: "1px solid var(--divider)",
+                    borderRadius: 10,
+                    padding: 10,
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ width: 90, height: 90, margin: "0 auto", display: "grid", placeItems: "center" }}>
+                    {c.mode === "count" ? (
+                      <CircularProgressbar
+                        value={c.pct}
+                        text={`${c.value}`}
+                        styles={buildStyles({
+                          textColor: "var(--text)",
+                          pathColor: "var(--accent)",
+                          trailColor: "var(--chip-bg)",
+                        })}
+                      />
+                    ) : (
+                      <div style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>
+                        {c.value}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--text)" }}>{c.label}</div>
+                </div>
+              ))}
             </div>
-            <div style={{ marginTop: 10, fontSize: 13, color: "var(--text)" }}>{c.label}</div>
-          </div>
-        ))}
+          );
+        })()}
       </div>
 
       {/* Table */}
       <div style={{ display: "flex", justifyContent: "center" }}>
         <div
-  style={{
-    width: "min(1100px, 94vw)",
-    background: "var(--card)",
-    border: "1px solid var(--divider)",
-    borderRadius: 16,
-    overflow: "hidden"        // ← مهم عشان الحواف تبان نظيفة
-  }}
-  className="no-scrollbar"
->
+          style={{
+            width: "min(1100px, 94vw)",
+            background: "var(--card)",
+            border: "1px solid var(--divider)",
+            borderRadius: 16,
+            overflow: "hidden"
+          }}
+          className="no-scrollbar"
+        >
           <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -579,21 +819,21 @@ const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px"
                   const images = parseImagePaths(r.end_visit_photo);
                   const jp = rowJP(r);
                   const jpStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "4px 12px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 800,
-  letterSpacing: 0.2,
-  background: jp === "IN JP" ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.14)",
-  border: `1px solid ${jp === "IN JP" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
-  color: jp === "IN JP" ? "#16a34a" : "#ef4444",
-  minWidth: 64,
-  justifyContent: "center",
-  textTransform: "uppercase",
-};
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 12px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: 0.2,
+                    background: jp === "IN JP" ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.14)",
+                    border: `1px solid ${jp === "IN JP" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+                    color: jp === "IN JP" ? "#16a34a" : "#ef4444",
+                    minWidth: 64,
+                    justifyContent: "center",
+                    textTransform: "uppercase",
+                  };
 
                   return (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--divider)" }}>
@@ -611,9 +851,7 @@ const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px"
                       <td style={tdStyle}>{toKSAClock(r.finished_at, isAr)}</td>
                       <td style={tdStyle}>{durMs ? msToClock(durMs) : "-"}</td>
                       <td style={tdStyle}>{rowStatus(r)}</td>
-                      <td style={tdStyle}>
-  <span style={jpStyle}>{rowJP(r)}</span>
-</td>
+                      <td style={tdStyle}><span style={jpStyle}>{rowJP(r)}</span></td>
                       <td style={tdStyle}>{(isAr ? r.end_reason_ar : r.end_reason_en) || r.end_reason || "-"}</td>
                       <td style={tdStyle}>
                         {images.length > 0 ? (
@@ -701,21 +939,13 @@ const tdStyle: React.CSSProperties = { textAlign: "center", padding: "10px 10px"
       )}
 
       <style jsx global>{`
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-  /* صفوف أنضف: خط تقسيم خفيف بين الصفوف فقط */
-  table tbody tr + tr td { border-top: 1px solid var(--divider); }
-
-  /* رأس الجدول ثابت وبخلفية أغمق قليلًا */
-  thead th { background: var(--header-bg); position: sticky; top: 0; z-index: 1; }
-
-  /* خلايا الـ td لتوسيط المحتوى رأسيًا */
-  td { vertical-align: middle; }
-  
-  /* خيارات الـ select بخلفية فاتحة */
-  select option { color: #000; background: #fff; }
-`}</style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        table tbody tr + tr td { border-top: 1px solid var(--divider); }
+        thead th { background: var(--header-bg); position: sticky; top: 0; z-index: 1; }
+        td { vertical-align: middle; }
+        select option { color: #000; background: #fff; }
+      `}</style>
     </div>
   );
 }

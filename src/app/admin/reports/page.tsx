@@ -8,6 +8,7 @@ import { useLangTheme } from "@/hooks/useLangTheme";
 import StepsToolbar from "@/app/admin/visit-steps/StepsToolbar";
 import StepDataTable from "@/app/admin/visit-steps/StepDataTable";
 import { VISIT_STEPS, StepKey } from "@/utils/visitStepsMap";
+import SupaImg from "@/components/SupaImg";
 
 /* ========= Supabase ========= */
 const supabase = createClient(
@@ -48,6 +49,9 @@ type SnapshotRow = {
   status: string;
   started_at: string | null;
   finished_at: string | null;
+ end_reason_en: string | null;
+  end_reason_ar: string | null;
+  end_visit_photo: string | null;
 };
 
 /* ========= Helpers ========= */
@@ -350,13 +354,18 @@ export default function Page() {
 
   const FIRST_STEP: StepKey = useMemo(() => Object.keys(VISIT_STEPS)[0] as StepKey, []);
   const [currentStep, setCurrentStep] = useState<StepKey>(FIRST_STEP);
+  const [endReasonViewer, setEndReasonViewer] = useState({ open: false, reasonEn: "", reasonAr: "", photo: "" });
 
-  const activeVisitId = useMemo(() => {
-    if (selectedSnapshotIds.length === 0) return null;
-    const sid = selectedSnapshotIds[0];
-    const s = snapshots.find((x) => x.id === sid);
-    return s ? (s.original_visit_id || s.tl_visit_id || null) : null;
-  }, [selectedSnapshotIds, snapshots]);
+  const { activeVisitId, activeDate } = useMemo(() => {
+  if (selectedSnapshotIds.length === 0) return { activeVisitId: null, activeDate: null };
+  const sid = selectedSnapshotIds[0];
+  const s = snapshots.find((x) => x.id === sid);
+  if (!s) return { activeVisitId: null, activeDate: null };
+
+  const visitId = s.original_visit_id || s.tl_visit_id || null;
+  const date = s.snapshot_date; // <-- استخراج التاريخ من الزيارة المختارة
+  return { activeVisitId: visitId, activeDate: date };
+}, [selectedSnapshotIds, snapshots]);
 
   const [availableSteps, setAvailableSteps] = useState<StepKey[]>([]);
   useEffect(() => {
@@ -591,107 +600,97 @@ export default function Page() {
       .sort((a, b) => a.label.localeCompare(b.label, "ar"));
   }, [filteredMarkets, selectedChains]);
 
-  /* ====== Snapshots via all_visits_combined ====== */
-  const [incompleteCount, setIncompleteCount] = useState(0);
+/* ====== Snapshots via all_visits_combined ====== */
+const [incompleteCount, setIncompleteCount] = useState(0);
 
-  useEffect(() => {
-    setSnapshots([]);
-    setSelectedSnapshotIds([]);
-    setIncompleteCount(0);
+// =================== الكود الجديد ===================
+useEffect(() => {
+  setSnapshots([]);
+  setSelectedSnapshotIds([]);
+  setIncompleteCount(0);
 
-    if (!filters.clientId || selectedUsers.length === 0) return;
-    if (selectedBranches.length === 0) return;
+  if (!filters.clientId || selectedUsers.length === 0 || selectedBranches.length === 0) {
+    return;
+  }
 
-    (async () => {
-      setLoading(true);
+  (async () => {
+    setLoading(true);
 
-      const { data: base } = await supabase
-        .from("all_visits_combined")
-        .select("visit_id, tl_visit_id")
-        .eq("client_id", filters.clientId)
-        .in("user_id", selectedUsers)
-        .in("market_id", selectedBranches);
+    let query = supabase
+      .from("all_visits_combined") // 👈 الآن نقرأ من الـ VIEW مباشرة
+      .select(`
+        id:visit_id,
+        original_visit_id:visit_id,
+        tl_visit_id,
+        user_id,
+        market_id,
+        client_id,
+        snapshot_date,
+        status,
+        started_at,
+        finished_at,
+        end_reason_en,
+        end_reason_ar,
+        end_visit_photo
+      `)
+      .eq("client_id", filters.clientId)
+      .in("user_id", selectedUsers)
+      .in("market_id", selectedBranches)
+      .not("status", "is", null); // تجاهل الزيارات بدون حالة
 
-      const rows = (base ?? []) as { visit_id: string | null; tl_visit_id: string | null }[];
-      const visitIds = Array.from(new Set(rows.map((r) => r.visit_id).filter((x): x is string => !!x)));
-      const tlVisitIds = Array.from(new Set(rows.map((r) => r.tl_visit_id).filter((x): x is string => !!x)));
+    if (filters.from) {
+      query = query.gte("snapshot_date", filters.from);
+    }
+    if (filters.to) {
+      query = query.lte("snapshot_date", filters.to);
+    }
 
-      if (visitIds.length === 0 && tlVisitIds.length === 0) {
-        setLoading(false);
-        return;
-      }
+    const { data, error } = await query.order("started_at", { ascending: false });
 
-      const collected: SnapshotRow[] = [];
+    if (error) {
+      console.error("Error fetching from all_visits_combined:", error);
+      setLoading(false);
+      return;
+    }
+    
+    // 👇 نحول الأسماء لتطابق النوع SnapshotRow
+    // الـ VIEW لا يحتوي على عمود id، لذا نستخدم visit_id بدلاً عنه
+    const collected = (data || []).map(item => ({
+      ...item,
+      id: item.id || item.tl_visit_id, 
+      original_visit_id: item.original_visit_id || item.id,
+    })) as SnapshotRow[];
 
-      if (visitIds.length > 0) {
-        for (let i = 0; i < visitIds.length; i += 500) {
-          const part = visitIds.slice(i, i + 500);
-          const { data } = await supabase
-            .from("DailyVisitSnapshots")
-            .select(
-              "id, original_visit_id, tl_visit_id, coordinator_visit_id, user_id, market_id, client_id, snapshot_date, status, started_at, finished_at"
-            )
-            .in("original_visit_id", part)
-            .or("status.eq.finished,started_at.not.is.null")
-            .order("started_at", { ascending: false });
-          if (data) collected.push(...(data as SnapshotRow[]));
-        }
-      }
 
-      if (tlVisitIds.length > 0) {
-        for (let i = 0; i < tlVisitIds.length; i += 500) {
-          const part = tlVisitIds.slice(i, i + 500);
-          const { data } = await supabase
-            .from("DailyVisitSnapshots")
-            .select(
-              "id, original_visit_id, tl_visit_id, coordinator_visit_id, user_id, market_id, client_id, snapshot_date, status, started_at, finished_at"
-            )
-            .in("tl_visit_id", part)
-            .or("status.eq.finished,started_at.not.is.null")
-            .order("started_at", { ascending: false });
-          if (data) collected.push(...(data as SnapshotRow[]));
-        }
-      }
+    // حساب عدد الزيارات غير المكتملة
+    const incomplete = collected.filter(s => s.status !== 'finished' && s.status !== 'ended').length;
+    setIncompleteCount(incomplete);
 
-      let incCount = 0;
-      if (visitIds.length > 0) {
-        for (let i = 0; i < visitIds.length; i += 500) {
-          const part = visitIds.slice(i, i + 500);
-          const { count } = await supabase
-            .from("DailyVisitSnapshots")
-            .select("id", { count: "exact", head: true })
-            .in("original_visit_id", part)
-            .neq("status", "finished");
-          incCount += count ?? 0;
-        }
-      }
-      if (tlVisitIds.length > 0) {
-        for (let i = 0; i < tlVisitIds.length; i += 500) {
-          const part = tlVisitIds.slice(i, i + 500);
-          const { count } = await supabase
-            .from("DailyVisitSnapshots")
-            .select("id", { count: "exact", head: true })
-            .in("tl_visit_id", part)
-            .neq("status", "finished");
-          incCount += count ?? 0;
-        }
-      }
+    setSnapshots(collected);
+    setLoading(false);
+  })();
+}, [filters.clientId, filters.from, filters.to, selectedUsers, selectedBranches]);
+// ================= نهاية الكود الجديد =================
 
-      const finishedSorted = collected.sort((a, b) => {
+  const { completedCount, pendingCount, visibleSnapshots } = useMemo(() => {
+    const completed = snapshots.filter(s => s.status === 'finished');
+    const ended = snapshots.filter(s => s.status === 'ended');
+    
+    // الزيارات التي ستظهر في القائمة هي المكتملة والمنهاة فقط
+    const visible = [...completed, ...ended].sort((a, b) => {
         const at = a.started_at ? +new Date(a.started_at) : 0;
         const bt = b.started_at ? +new Date(b.started_at) : 0;
         return bt - at;
-      });
-      setSnapshots(finishedSorted);
-      setIncompleteCount(incCount);
-      setLoading(false);
-    })();
-  }, [filters.clientId, filters.from, filters.to, selectedUsers, selectedBranches]);
+    });
+const uniqueVisible = Array.from(new Map(visible.map(item => [item.id, item])).values());
+    // "المعلقة" هي أي زيارة غير مكتملة وغير منهاة
+    const pending = incompleteCount - ended.length;
 
-  const statusTotals = useMemo(() => {
-    const done = snapshots.length;
-    const notDone = incompleteCount;
-    return { done, notDone, all: done + notDone };
+    return {
+      completedCount: completed.length,
+      pendingCount: Math.max(0, pending), // تأكد من أنها ليست أقل من صفر
+      visibleSnapshots: uniqueVisible,
+    };
   }, [snapshots, incompleteCount]);
 
   const t = useMemo(
@@ -925,35 +924,103 @@ export default function Page() {
             )}
           </Panel>
 
-          {/* Dates */}
-          <Panel title={`${t.dates} — ${t.completed}: ${statusTotals.done} | ${t.incomplete}: ${statusTotals.notDone}`} right={<PillCount n={statusTotals.all} />}>
+         {/* Dates */}
+          <Panel title={`${t.dates} — ${ar ? 'مكتملة' : 'Completed'}: ${completedCount} | ${ar ? 'معلقة' : 'Pending'}: ${pendingCount}`} right={<PillCount n={visibleSnapshots.length} />}>
             {selectedUsers.length === 0 ? (
               <EmptyBox text={t.pickUser} />
-            ) : selectedChains.length === 0 ? (
-              <EmptyBox text={ar ? "اختر سلسلة أولًا" : "Pick a store first"} />
             ) : selectedBranches.length === 0 ? (
               <EmptyBox text={t.pickBranch} />
-            ) : snapshots.length === 0 ? (
+            ) : visibleSnapshots.length === 0 ? (
               <EmptyBox text={t.noDates} />
             ) : (
               <>
                 <div style={{ marginBottom: 8, fontSize: 12, opacity: 0.8 }}>{t.pickDate}</div>
                 <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-                  {snapshots.map((s) => {
+                  {visibleSnapshots.map((s) => {
                     const sel = selectedSnapshotIds.includes(s.id);
-                    const started = s.started_at
-                      ? new Date(s.started_at).toLocaleString(ar ? "ar-EG" : "en-GB", { timeZone: "Asia/Riyadh" })
+                    const visitTimestamp = s.started_at || s.finished_at; // 👈 استخدم أول تاريخ متاح
+                    const started = visitTimestamp
+                      ? new Date(visitTimestamp).toLocaleString(ar ? "ar-EG" : "en-GB", { timeZone: "Asia/Riyadh" })
                       : "—";
-                    const statusNice = (s.status || "").toLowerCase() === "finished" ? (ar ? "مكتملة" : "Finished") : ar ? "غير كاملة" : "Incomplete";
+
+                    // الحالة 1: الزيارة مكتملة
+                    if (s.status === 'finished') {
+                      return (
+                        <button key={s.id} type="button" onClick={() => setSelectedSnapshotIds([s.id])} style={btn(56, sel)}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, textAlign: ar ? "right" : "left" }}>
+                            <strong>{started}</strong>
+                            <span style={{ opacity: 0.75, fontSize: 12 }}>{ar ? "مكتملة" : "Finished"}</span>
+                          </div>
+                          <span style={{ opacity: 0.6 }}>{sel ? "✓" : "＋"}</span>
+                        </button>
+                      );
+                    }
+
+                   // الحالة 2: الزيارة تم إنهاؤها
+                  if (s.status === 'ended') {
                     return (
-                      <button key={s.id} type="button" onClick={() => setSelectedSnapshotIds([s.id])} style={btn(56, sel)}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4, textAlign: ar ? "right" : "left" }}>
+                      <div
+                        key={s.id}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          border: '1px solid var(--input-border)',
+                          background: 'var(--input-bg)',
+                          textAlign: ar ? "right" : "left",
+                        }}
+                      >
+                        {/* الجزء العلوي: المعلومات */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           <strong>{started}</strong>
-                          <span style={{ opacity: 0.75, fontSize: 12 }}>{statusNice}</span>
+                          <span style={{ opacity: 0.85, fontSize: 12, color: '#f87171', fontWeight: 'bold' }}>
+                            {ar ? "تم إنهاؤها" : "Ended"}
+                          </span>
                         </div>
-                        <span style={{ opacity: 0.6 }}>{sel ? "✓" : "＋"}</span>
-                      </button>
+
+                        {/* الجزء السفلي: الزر */}
+                        <button 
+  type="button" 
+  onClick={() => {
+    let photoUrl = s.end_visit_photo || ""; // القيمة الافتراضية هي النص الخام
+    try {
+      // نحاول تحليل النص كقائمة
+      const photos = JSON.parse(photoUrl);
+      // إذا نجح التحليل وكانت قائمة وبها عناصر، نأخذ الرابط الأول
+      if (Array.isArray(photos) && photos.length > 0) {
+        photoUrl = photos[0];
+      }
+    } catch {
+      // إذا فشل التحليل، لا تفعل شيئًا، لأن photoUrl تحتوي بالفعل على القيمة الصحيحة كنص
+    }
+    setEndReasonViewer({
+    open: true, 
+    reasonEn: s.end_reason_en || '', 
+    reasonAr: s.end_reason_ar || '', 
+    photo: photoUrl
+  });
+  }}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 10,
+                            border: '1px solid var(--divider)',
+                            background: 'var(--card)',
+                            color: 'var(--text)',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            width: '100%',
+                          }}
+                        >
+                          {ar ? "عرض سبب الإنهاء" : "Show End Reason"}
+                        </button>
+                      </div>
                     );
+                  }
+                    
+                    return null;
                   })}
                 </div>
               </>
@@ -980,11 +1047,68 @@ export default function Page() {
                   <StepsToolbar value={currentStep} onChange={setCurrentStep} onlyKeys={availableSteps} />
                 </div>
 
-                <StepDataTable step={currentStep} pageSize={25} visitId={activeVisitId} />
+                <StepDataTable
+  step={currentStep}
+  pageSize={25}
+  visitId={activeVisitId}
+  // 👇 تمرير التاريخ المحدد كنطاق ليوم واحد
+  startDate={activeDate} 
+  endDate={activeDate}
+/>
               </>
             )}
           </Panel>
-
+{/* Modal to show End Reason */}
+      {endReasonViewer.open && (
+        <div
+          onClick={() => setEndReasonViewer({ open: false, reason: "", photo: "" })}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10000,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              maxWidth: 400,
+              width: "100%",
+              background: "var(--card)",
+              borderRadius: 16,
+              padding: 24,
+              border: "1px solid var(--divider)",
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}
+          >
+            <h3 style={{margin: 0}}>{ar ? "سبب إنهاء الزيارة" : "Visit End Reason"}</h3>
+           <p style={{margin: 0, background: 'var(--input-bg)', padding: 12, borderRadius: 8}}>
+  {(ar ? endReasonViewer.reasonAr : endReasonViewer.reasonEn) || (ar ? "لا يوجد سبب مسجل." : "No reason recorded.")}
+</p>
+            {endReasonViewer.photo && (
+    <div>
+        <h4 style={{margin: '0 0 8px 0'}}>{ar ? "الصورة المرفقة" : "Attached Photo"}</h4>
+        <div style={{position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden'}}>
+            <SupaImg src={endReasonViewer.photo} alt="End visit photo" unoptimized fill style={{objectFit: 'cover'}} />
+        </div>
+    </div>
+)}
+            <button
+              onClick={() => setEndReasonViewer({ open: false, reason: "", photo: "" })}
+              style={{...btnSm(true), alignSelf: 'flex-end', minWidth: 100}}
+            >
+              {ar ? "إغلاق" : "Close"}
+            </button>
+          </div>
+        </div>
+      )}
           {/* Buttons */}
           <div style={{ display: "flex", justifyContent: ar ? "flex-end" : "flex-start", gap: 12, gridColumn: "1 / -1" }}>
             <Link

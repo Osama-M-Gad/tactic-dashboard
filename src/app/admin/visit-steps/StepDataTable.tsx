@@ -21,12 +21,14 @@ type CellType = "text" | "number" | "datetime" | "image" | "boolean" | "pill";
 type Props = {
   step: StepKey;
   pageSize?: number;
-  visitId?: string | null; // نفلتر بيها حسب الزيارة
-};
+  visitId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
 
 /* ===== ثوابت خاصة بحقل حالة JP + جدول الزيارات ===== */
-const JP_FIELDS = ["jp_state"] as const; // لو الاسم مختلف غيّره هنا
-const VISITS_TABLE = "DailyVisitSnapshots"; // لو جدولك اسمه مختلف غيّره هنا
+const JP_FIELDS = ["jp_state"] as const;
+const VISITS_TABLE = "DailyVisitSnapshots";
 
 /* ===== helpers: قراءة آمنة بدون any ===== */
 function getStr(obj: Record<string, unknown> | undefined, key: string): string {
@@ -75,7 +77,6 @@ function normalizeImageList(v: unknown, bucketHint?: string): string[] {
   return [toPublicUrl(String(v), bucketHint)].filter(Boolean);
 }
 
-/** طباعة خطأ مفيد بدل {} بدون استخدام any */
 function printableError(e: unknown): Record<string, unknown> {
   if (e instanceof Error) {
     const out: Record<string, unknown> = { name: e.name, message: e.message };
@@ -93,13 +94,18 @@ function printableError(e: unknown): Record<string, unknown> {
   }
   return { message: String(e) };
 }
-/** يتحقق أن القيمة سجل كائن بسيط {…} وليست Array أو null */
 function isObjRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /* ===== component ===== */
-export default function StepDataTable({ step, pageSize = 25, visitId = null }: Props) {
+export default function StepDataTable({
+  step,
+  pageSize = 25,
+  visitId = null,
+  startDate = null,
+  endDate = null,
+}: Props) {
   const { isArabic } = useLangTheme();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -153,8 +159,20 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
 
       let q = supabase.from(cfg.table).select(cfg.select, { count: "exact" }).range(from, to);
 
-      if (visitId) q = q.eq("visit_id", visitId);
-      if (cfg.defaultOrder) q = q.order(cfg.defaultOrder.column, { ascending: cfg.defaultOrder.ascending });
+      if (visitId) {
+        q = q.eq("visit_id", visitId);
+      }
+
+      if (startDate) {
+        q = q.gte("created_at", `${startDate}T00:00:00`);
+      }
+      if (endDate) {
+        q = q.lte("created_at", `${endDate}T23:59:59`);
+      }
+
+      if (cfg.defaultOrder) {
+        q = q.order(cfg.defaultOrder.column, { ascending: cfg.defaultOrder.ascending });
+      }
 
       const res = await q;
       if (res.error) {
@@ -171,35 +189,31 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
       const arr: Row[] = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
       setRows(arr);
 
-      /* ===== احقن حالة IN/OUT JP من جدول الزيارات لو العمود مش موجود داخل select/columns */
+      /* ===== احقن حالة IN/OUT JP من جدول الزيارات ===== */
       try {
-        const hasInlineJP =
-          cfg.columns.some((c) => JP_FIELDS.includes(c.key as (typeof JP_FIELDS)[number])) ||
-          new RegExp(`(^|,)\\s*(${JP_FIELDS.join("|")})\\s*(,|$)`, "i").test(cfg.select);
+        const hasInlineJP = new RegExp(`(^|,)\\s*(${JP_FIELDS.join("|")})\\s*(,|$)`, "i").test(cfg.select);
 
         if (!hasInlineJP) {
           const visitIds = Array.from(
-  new Set(arr.map((r) => getVisitId(r)).filter(Boolean))
-);
+            new Set(arr.map((r) => getVisitId(r)).filter(Boolean))
+          );
 
           if (visitIds.length) {
             const { data: vData, error: vErr } = await supabase
               .from(VISITS_TABLE)
-              .select(`id, ${JP_FIELDS.join(", ")}`)
-              .in("id", visitIds);
+              .select(`original_visit_id, tl_visit_id, ${JP_FIELDS.join(", ")}`)
+              .or(`original_visit_id.in.(${visitIds.join(",")}),tl_visit_id.in.(${visitIds.join(",")})`);
 
             if (!vErr && Array.isArray(vData)) {
               const map: Record<string, string> = {};
               for (const v of vData) {
                 if (!isObjRecord(v)) continue;
                 const rec = v as Record<string, unknown>;
-                const vid = getId(rec);
-                const val =
-                  getStr(rec, "jp_state") || // 👈 أهم واحدة
-                  getStr(rec, "in_jp") ||
-                  getStr(rec, "jp_status") ||
-                  getStr(rec, "status_in_jp");
-                if (vid && val) map[vid] = val.trim();
+                const key = getStr(rec, "original_visit_id") || getStr(rec, "tl_visit_id");
+                const val = getStr(rec, "jp_state");
+                if (key && val) {
+                  map[key] = val.trim();
+                }
               }
               setVisitStatusMap(map);
             } else if (vErr) {
@@ -238,9 +252,14 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
               if (!isObjRecord(recUnknown)) continue;
               const rec = recUnknown as Record<string, unknown>;
               const id = getId(rec);
+              
+              // 👇 --- بداية التصحيح ---
+              // كان الكود يبحث عن "arabic_name" بشكل ثابت
+              // الآن يقرأ اسم الحقل العربي من الإعدادات
               const labelPrimary = getStr(rec, lu.labelField);
-              const labelArabic = getStr(rec, "arabic_name");
-              map[id] = (isArabic ? labelArabic : labelPrimary) || labelPrimary || labelArabic || id;
+              const labelArabic = lu.labelFieldAr ? getStr(rec, lu.labelFieldAr) : "";
+              map[id] = (isArabic && labelArabic) ? labelArabic : labelPrimary || id;
+              // 👆 --- نهاية التصحيح ---
             }
             next[colKey] = map;
           } else if (lres.error) {
@@ -259,21 +278,18 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
         const m = (e as { message?: unknown }).message;
         if (typeof m === "string") msg = m;
       }
-
       console.error("[StepDataTable] fetch error", printableError(e));
       setErrMsg(msg);
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [cfg, page, pageSize, visitId, isArabic]);
+  }, [cfg, page, pageSize, visitId, isArabic, startDate, endDate]);
 
-  // لما الخطوة أو الزيارة تتغير، نرجّع لأول صفحة
   useEffect(() => {
     setPage(0);
   }, [step, visitId]);
 
-  // نفّذ الجلب عند تغيّر deps
   useEffect(() => {
     fetchPage();
   }, [fetchPage]);
@@ -295,72 +311,57 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
             </tr>
           </thead>
 
-        <tbody>
-          {loading ? (
-            <tr>
-              <td className="px-3 py-4" colSpan={visibleCols.length}>
-                …loading
-              </td>
-            </tr>
-          ) : errMsg ? (
-            <tr>
-              <td className="px-3 py-4 text-red-400" colSpan={visibleCols.length}>
-                {errMsg}
-              </td>
-            </tr>
-          ) : rows.length === 0 ? (
-            <tr>
-              <td className="px-3 py-4" colSpan={visibleCols.length}>
-                {isArabic ? "لا توجد بيانات" : "No data"}
-              </td>
-            </tr>
-          ) : (
-            rows.map((r, ridx) => (
-              <tr key={(r.id as string) ?? ridx} className="odd:bg-[var(--card)] even:bg-transparent">
-                {visibleCols.map((col) => {
-                  const rawV = r[col.key as keyof Row];
+          <tbody>
+            {loading ? (
+              <tr><td className="px-3 py-4" colSpan={visibleCols.length}>…loading</td></tr>
+            ) : errMsg ? (
+              <tr><td className="px-3 py-4 text-red-400" colSpan={visibleCols.length}>{errMsg}</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td className="px-3 py-4" colSpan={visibleCols.length}>{isArabic ? "لا توجد بيانات" : "No data"}</td></tr>
+            ) : (
+              rows.map((r, ridx) => (
+                <tr key={(r.id as string) ?? ridx} className="odd:bg-[var(--card)] even:bg-transparent">
+                  {visibleCols.map((col) => {
+                    const rawV = r[col.key as keyof Row];
+                    const lu = cfg.lookups?.[col.key];
+                    let display: unknown =
+                      lu && (typeof rawV === "string" || typeof rawV === "number")
+                        ? (lookups[col.key]?.[String(rawV)] ?? rawV)
+                        : rawV;
 
-                  // تطبيق lookup إن وجد
-                  const lu = cfg.lookups?.[col.key];
-                  let display: unknown =
-                    lu && (typeof rawV === "string" || typeof rawV === "number")
-                      ? (lookups[col.key]?.[String(rawV)] ?? rawV)
-                      : rawV;
+                    if (
+                      (!display || String(display).trim() === "" || display === "-") &&
+                      JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) &&
+                      (r as Row).visit_id
+                    ) {
+                      const vid = getVisitId(r as Row);
+                      if (vid) {
+                        const jp = visitStatusMap[vid as keyof typeof visitStatusMap];
+                        if (jp) display = jp;
+                      }
+                    }
 
-                  // لو العمود خاص بـ JP وحصّلنا القيمة من جدول الزيارات
-                  if (
-  (!display || String(display).trim() === "" || display === "-") &&
-  JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) &&
-  (r as Row).visit_id
-) {
-  const vid = getVisitId(r as Row);            // ← دايمًا string
-  if (vid) {
-    const jp = visitStatusMap[vid as keyof typeof visitStatusMap];
-    if (jp) display = jp;
-  }
-}
+                    const forcedType: CellType =
+                      (col.type as CellType | undefined) ??
+                      (JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) ? "pill" : "text");
 
-                  const forcedType: CellType =
-                    (col.type as CellType | undefined) ??
-                    (JP_FIELDS.includes(col.key as (typeof JP_FIELDS)[number]) ? "pill" : "text");
-
-                  return (
-                    <td key={col.key} className="px-3 py-2 border-t border-[var(--divider)] align-top">
-                      <CellRenderer
-                        value={display}
-                        type={forcedType}
-                        bucketHint={col.bucketHint}
-                        isArabic={isArabic}
-                        onPreview={(imgs, title) => openViewer(imgs, title)}
-                        column={col}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))
-          )}
-        </tbody>
+                    return (
+                      <td key={col.key} className="px-3 py-2 border-t border-[var(--divider)] align-top">
+                        <CellRenderer
+                          value={display}
+                          type={forcedType}
+                          bucketHint={col.bucketHint}
+                          isArabic={isArabic}
+                          onPreview={(imgs, title) => openViewer(imgs, title)}
+                          column={col}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
         </table>
       </div>
 
@@ -398,9 +399,7 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                 ×
               </button>
             </div>
-
             <div className="relative w-full h-[70vh] bg-[var(--input-bg)] rounded-xl overflow-hidden">
-              {/* زرار السابق */}
               {viewer.imgs.length > 1 && (
                 <button
                   onClick={prevImg}
@@ -410,15 +409,12 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                   ‹
                 </button>
               )}
-
-              {/* الصورة */}
               <SupaImg
                 src={viewer.imgs[viewer.index]}
                 alt="preview"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                unoptimized
               />
-
-              {/* زرار التالي */}
               {viewer.imgs.length > 1 && (
                 <button
                   onClick={nextImg}
@@ -429,8 +425,6 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                 </button>
               )}
             </div>
-
-            {/* عدّاد + thumbnails صغيرة */}
             <div className="flex items-center justify-between mt-2">
               <div className="opacity-80 text-xs">
                 {viewer.index + 1} / {viewer.imgs.length}
@@ -446,7 +440,7 @@ export default function StepDataTable({ step, pageSize = 25, visitId = null }: P
                       onClick={() => setViewer((v) => ({ ...v, index: i }))}
                       title={`${i + 1}`}
                     >
-                      <SupaImg src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <SupaImg src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} unoptimized />
                     </button>
                   ))}
                 </div>
@@ -481,7 +475,6 @@ function CellRenderer({
       const v = Boolean(value);
       return <span>{v ? (isArabic ? "نعم" : "Yes") : isArabic ? "لا" : "No"}</span>;
     }
-
     case "number": {
       const n = Number(value);
       return (
@@ -490,7 +483,6 @@ function CellRenderer({
         </span>
       );
     }
-
     case "datetime": {
       try {
         const d = new Date(String(value));
@@ -499,7 +491,6 @@ function CellRenderer({
         return <span>{String(value)}</span>;
       }
     }
-
     case "image": {
       const imgs = normalizeImageList(value, bucketHint);
       if (imgs.length === 0) return <span className="opacity-60">—</span>;
@@ -512,45 +503,29 @@ function CellRenderer({
           title={isArabic ? "عرض" : "Preview"}
         >
           <div className="relative w-[64px] h-[64px] rounded-md overflow-hidden border border-[var(--divider)]">
-            <SupaImg src={first} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <SupaImg src={first} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} unoptimized />
           </div>
         </button>
       );
     }
+    // الكود الجديد الصحيح في StepDataTable.tsx
+case "pill": {
+  const raw = String(value).replace(/\s+/g, " ").trim().toUpperCase();
 
-    case "pill": {
-      const raw = String(value).replace(/\s+/g, " ").trim().toUpperCase();
+  // 1. نحدد فقط "النكهة" (اللون) المطلوبة
+  const variant = raw.includes("OUT")
+    ? "danger"  // أحمر
+    : raw.includes("IN")
+    ? "success" // أخضر
+    : "neutral";  // افتراضي
 
-      const tone = raw.includes("OUT")
-        ? { bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", text: "#ef4444" } // OUT = أحمر
-        : raw.includes("IN")
-        ? { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.35)", text: "#16a34a" } // IN = أخضر
-        : { bg: "var(--chip-bg)", border: "var(--divider)", text: "var(--muted)" }; // افتراضي
-
-      return (
-        <BadgePill
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 12px",
-            borderRadius: 999,
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: 0.2,
-            background: tone.bg,
-            border: `1px solid ${tone.border}`,
-            color: tone.text,
-            minWidth: 64,
-            justifyContent: "center",
-            textTransform: "uppercase",
-          }}
-        >
-          {raw}
-        </BadgePill>
-      );
-    }
-
+  // 2. نستدعي الشيف ونعطيه النكهة والنص فقط
+  return (
+    <BadgePill variant={variant}>
+      {raw || "—"}
+    </BadgePill>
+  );
+}
     default: {
       const text = String(value ?? "").trim();
       return <span className="whitespace-pre-wrap break-words">{text || "—"}</span>;
