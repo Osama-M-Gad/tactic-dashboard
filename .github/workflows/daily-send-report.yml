@@ -1,36 +1,37 @@
-      - name: Call Supabase Edge Function (debug & sanitize)
-        env:
-          FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
-          CRON_KEY: ${{ secrets.CRON_KEY }}
-        run: |
-          set -euo pipefail
-          # نظّف القيم من أي مسافات/أسطر/CR
-          URL_CLEAN="$(printf '%s' "$FUNCTION_URL" | tr -d '\r' | xargs)"
-          KEY_CLEAN="$(printf '%s' "$CRON_KEY" | tr -d '\r' | xargs)"
+- name: Call Supabase Edge Function (debug & sanitize)
+  env:
+    FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
+    CRON_KEY:     ${{ secrets.CRON_KEY }}
+  run: |
+    set -euo pipefail
 
-          echo "Checking inputs..."
-          if [ -z "$URL_CLEAN" ]; then
-            echo "FUNCTION_URL is EMPTY"; exit 1
-          fi
-          if [ -z "$KEY_CLEAN" ]; then
-            echo "CRON_KEY is EMPTY"; exit 1
-          fi
-          case "$URL_CLEAN" in
-            https://*) : ;;
-            *) echo "FUNCTION_URL must start with https:// — got: $URL_CLEAN"; exit 1 ;;
-          esac
+    # تنظيف الـ URL ومفتاح الكرون
+    URL_CLEAN=$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')
+    KEY_CLEAN=$(printf %s "$CRON_KEY"     | tr -dc '[:print:]')
 
-          echo "POST (masked) URL length: $(echo -n "$URL_CLEAN" | wc -c)"
+    echo "Checking inputs..."
+    if [ -z "$URL_CLEAN" ]; then
+      echo "FUNCTION_URL is EMPTY"; exit 1
+    fi
+    if [ -z "$KEY_CLEAN" ]; then
+      echo "CRON_KEY is EMPTY"; exit 1
+    fi
 
-          # النداء الفعلي مع لوج تفصيلي
-          http_code=$(curl -sS -v -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
-            -H "x-cron-key: $KEY_CLEAN" \
-            -H "Content-Type: application/json" \
-            --data '{}')
+    case "$URL_CLEAN" in
+      https://?* ) ;;                         # يجب أن يبدأ بـ https://
+      * )
+        echo "FUNCTION_URL must start with https:// -- got: $URL_CLEAN"; exit 1 ;;
+    esac
 
-          echo "---- HTTP $http_code ----"
-          echo "---- BODY ----"
-          cat /tmp/resp.txt || true
-          echo "-------------"
+    echo "POST (masked) URL length: $(echo -n "$URL_CLEAN" | wc -c)"
+    http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
+      -H "x-cron-key: $KEY_CLEAN" \
+      -H "Content-Type: application/json" \
+      --data '{}' )
 
-          [ "$http_code" -ge 400 ] && exit 1 || exit 0
+    echo "---- HTTP $http_code ----"
+    cat /tmp/resp.txt || true
+
+    if [ "$http_code" -ge 400 ]; then
+      exit 1
+    fi
