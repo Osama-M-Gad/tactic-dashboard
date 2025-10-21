@@ -1,42 +1,67 @@
 name: Daily Send Report
 
 on:
-  # تشغيل مجدول: كل يوم الساعة 03:00 فجراً بتوقيت الرياض (00:00 UTC)
+  # GitHub Actions cron runs in UTC — 00:00 UTC = 03:00 Asia/Riyadh
   schedule:
     - cron: '0 0 * * *'
-  # تفعيل زر التشغيل اليدوي في صفحة Actions
+  # Manual trigger from the Actions tab
   workflow_dispatch:
+
+# Prevent overlapping runs if one takes long
+concurrency:
+  group: daily-send-report
+  cancel-in-progress: false
 
 jobs:
   send-report:
     name: Send Daily Report
     runs-on: ubuntu-latest
+
     env:
+      # Put these in: Repo Settings → Secrets and variables → Actions
       FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
       CRON_KEY: ${{ secrets.CRON_KEY }}
+      # Optional: if your function needs Authorization (verify_jwt or custom check)
+      SERVICE_ROLE_KEY: ${{ secrets.SERVICE_ROLE_KEY }}
+
     steps:
       - name: Invoke Supabase Edge Function
         run: |
           set -eo pipefail
+
+          # Clean any stray non-printable chars
           URL_CLEAN="$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')"
-          KEY_CLEAN="$(printf %s "$CRON_KEY" | tr -dc '[:print:]')"
+          CRON_KEY_CLEAN="$(printf %s "$CRON_KEY" | tr -dc '[:print:]')"
+          SR_KEY_CLEAN="$(printf %s "$SERVICE_ROLE_KEY" | tr -dc '[:print:]')"
 
           if [ -z "$URL_CLEAN" ]; then
             echo "ERROR: FUNCTION_URL is EMPTY"; exit 1
           fi
-          if [ -z "$KEY_CLEAN" ]; then
+          if [ -z "$CRON_KEY_CLEAN" ]; then
             echo "ERROR: CRON_KEY is EMPTY"; exit 1
           fi
 
-          # إرسال الطلب إلى الفانكشن عبر x-cron-key
-          http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
-            -H "x-cron-key: $KEY_CLEAN" \
-            -H "Content-Type: application/json" \
+          # Compose headers
+          HDRS=(-H "x-cron-key: $CRON_KEY_CLEAN" -H "Content-Type: application/json")
+          # If you also want to pass Authorization (optional)
+          if [ -n "$SR_KEY_CLEAN" ]; then
+            HDRS+=(-H "Authorization: Bearer $SR_KEY_CLEAN")
+          fi
+
+          echo "Calling: $URL_CLEAN"
+          # Robust curl: retries, fail on HTTP >=400 via our check, timeout
+          http_code=$(curl -sS \
+            --retry 3 --retry-connrefused --max-time 60 \
+            -o /tmp/resp.txt -w "%{http_code}" \
+            -X POST "$URL_CLEAN" \
+            "${HDRS[@]}" \
             --data '{}')
 
           echo "HTTP $http_code"
+          echo "--- Response body ---"
           cat /tmp/resp.txt || true
+          echo "---------------------"
 
-          if [ "$http_code" -ge 400 ]; then
+          if [ "$http_code" -ge 400 ] || [ "$http_code" -lt 200 ]; then
             exit 1
           fi
