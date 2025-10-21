@@ -1,54 +1,21 @@
 name: Daily Send Report
 
 on:
-  # تشغيل مجدول: كل يوم الساعة 03:00 فجراً بتوقيت الرياض
+  # تشغيل مجدول: كل يوم الساعة 03:00 فجراً بتوقيت الرياض (00:00 UTC)
   schedule:
     - cron: '0 0 * * *'
   # تفعيل زر التشغيل اليدوي في صفحة Actions
   workflow_dispatch:
 
 jobs:
-  call-function:name: Send Daily Report
-
-# This workflow runs daily at midnight UTC (03:00 KSA) and
-# invokes the Supabase Edge Function to send the dname: Send Daily Report
-
-# This workflow runs daily at midnight UTC (03:00 KSA) and
-# invokes the Supabase Edge Function to send the daily email report.
-on:
-  schedule:
-    - cron: "0 0 * * *"
-
-jobs:
   send-report:
+    name: Send Daily Report
     runs-on: ubuntu-latest
+    env:
+      FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
+      CRON_KEY: ${{ secrets.CRON_KEY }}
     steps:
       - name: Invoke Supabase Edge Function
-        run: |
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            https://sygnesgnnaoadhrzacmp.functions.supabase.co/send-daily-reportaily email report.
-on:
-  schedule:
-    - cron: "0 0 * * *"
-
-jobs:
-  send-report:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Invoke Supabase Edge Function
-        run: |
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            https://sygnesgnnaoadhrzacmp.functions.supabase.co/send-daily-report
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call Supabase Edge Function
-        env:
-          FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
-          CRON_KEY: ${{ secrets.CRON_KEY }}
         run: |
           set -eo pipefail
           URL_CLEAN="$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')"
@@ -61,7 +28,7 @@ jobs:
             echo "ERROR: CRON_KEY is EMPTY"; exit 1
           fi
 
-          # إرسال الطلب إلى الفانكشن
+          # إرسال الطلب إلى الفانكشن عبر x-cron-key
           http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
             -H "x-cron-key: $KEY_CLEAN" \
             -H "Content-Type: application/json" \
