@@ -15,18 +15,25 @@ jobs:
     env:
       FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
       SERVICE_ROLE_KEY: ${{ secrets.SERVICE_ROLE_KEY }}
+
     steps:
-      - name: Invoke Supabase Edge Function (Authorization)
+      - name: Invoke Supabase Edge Function (Scheduled via Authorization)
         run: |
           set -eo pipefail
+
           URL_CLEAN="$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')"
           SR_KEY_CLEAN="$(printf %s "$SERVICE_ROLE_KEY" | tr -dc '[:print:]')"
 
-          if [ -z "$URL_CLEAN" ]; then echo "ERROR: FUNCTION_URL is empty"; exit 1; fi
-          if [ -z "$SR_KEY_CLEAN" ]; then echo "ERROR: SERVICE_ROLE_KEY is empty"; exit 1; fi
+          if [ -z "$URL_CLEAN" ]; then
+            echo "ERROR: FUNCTION_URL is empty"; exit 1
+          fi
+          if [ -z "$SR_KEY_CLEAN" ]; then
+            echo "ERROR: SERVICE_ROLE_KEY is empty"; exit 1
+          fi
 
           http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
             -H "Authorization: Bearer $SR_KEY_CLEAN" \
+            -H "x-schedule: 1" \
             -H "Content-Type: application/json" \
             --data '{}')
 
@@ -35,4 +42,6 @@ jobs:
           cat /tmp/resp.txt || true
           echo "----------------"
 
-          [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 400 ]; then
+            exit 1
+          fi
