@@ -351,149 +351,101 @@ export default function AdminDashboardPage() {
     const clientLogoUrl = useMemo(() => toAvatarPublicUrl(headerInfo?.client_logo_filename || client?.logo_url), [headerInfo?.client_logo_filename, client?.logo_url]);
 
     const {
-    regionOptions,
-    cityOptions,
-    marketOptions,
-    teamLeaderOptions,
-  } = useMemo(() => {
-    // 1. تحديد قائمة الأسواق المسموح بها بناءً على صلاحيات المستخدم
-    const permissionedMarkets = allMarkets.filter(market => {
-      if (userFilters?.allowed_markets === null) {
-        return true;
-      }
-      if (Array.isArray(userFilters?.allowed_markets)) {
-        if (userFilters.allowed_markets.length === 0) return false;
-        return market.store ? userFilters.allowed_markets.includes(market.store) : false;
-      }
-      return false;
-    });
-
-    // 2. تحديد قادة الفرق المسموح بهم بناءً على صلاحيات المستخدم
-    const permissionedTeamLeaders = teamLeaders.filter(tl => {
-      if (userFilters?.Team_leader === null) {
-        return true;
-      }
-      if (Array.isArray(userFilters?.Team_leader)) {
-        if (userFilters.Team_leader.length === 0) return false;
-        return userFilters.Team_leader.includes(tl.id);
-      }
-      return false;
-    });
-
-    // 3. فلترة الخيارات بناءً على اختيارات المستخدم الحالية
-    let marketsFilteredByTL = permissionedMarkets;
-    if (selectedTeamLeader) {
-      const marketIdsForTl = new Set(tlMarketMap[selectedTeamLeader] || []);
-      marketsFilteredByTL = permissionedMarkets.filter(m => marketIdsForTl.has(m.id));
+  regionOptions,
+  cityOptions,
+  marketOptions,
+  teamLeaderOptions,
+} = useMemo(() => {
+  // 1) الأسواق المسموح بها حسب صلاحيات المستخدم
+  const permissionedMarkets = allMarkets.filter((market) => {
+    if (userFilters?.allowed_markets === null) return true;
+    if (Array.isArray(userFilters?.allowed_markets)) {
+      if (userFilters.allowed_markets.length === 0) return false;
+      return market.store ? userFilters.allowed_markets.includes(market.store) : false;
     }
-    
-    let marketsFilteredByGeo = permissionedMarkets;
-    if (selectedRegion) marketsFilteredByGeo = marketsFilteredByGeo.filter(m => m.region === selectedRegion);
-    if (selectedCity) marketsFilteredByGeo = marketsFilteredByGeo.filter(m => m.city === selectedCity);
-    if (selectedMarketName) marketsFilteredByGeo = marketsFilteredByGeo.filter(m => m.store === selectedMarketName);
+    return false;
+  });
 
-   // 4. توليد القوائم النهائية للـ dropdowns
-const finalRegionOptions =
-  [...new Set(
-    marketsFilteredByTL
-      .map(m => m.region)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
-
-let cityOptionSource = marketsFilteredByTL;
-if (selectedRegion) {
-  cityOptionSource = cityOptionSource.filter(m => m.region === selectedRegion);
-}
-const finalCityOptions =
-  [...new Set(
-    cityOptionSource
-      .map(m => m.city)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
-
-let marketOptionSource = marketsFilteredByTL;
-if (selectedRegion) marketOptionSource = marketOptionSource.filter(m => m.region === selectedRegion);
-if (selectedCity)   marketOptionSource = marketOptionSource.filter(m => m.city   === selectedCity);
-
-const finalMarketOptions =
-  [...new Set(
-    marketOptionSource
-      .map(m => m.store)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
-
-
-let cityOptionSource = marketsFilteredByTL;
-if (selectedRegion) {
-  cityOptionSource = cityOptionSource.filter(m => m.region === selectedRegion);
-}
-const finalCityOptions =
-  [...new Set(
-    cityOptionSource
-      .map(m => m.city)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
-
-let marketOptionSource = marketsFilteredByTL;
-if (selectedRegion) marketOptionSource = marketOptionSource.filter(m => m.region === selectedRegion);
-if (selectedCity)   marketOptionSource = marketOptionSource.filter(m => m.city   === selectedCity);
-
-const finalMarketOptions =
-  [...new Set(
-    marketOptionSource
-      .map(m => m.store)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
-
-
-    let cityOptionSource = marketsFilteredByTL;
-    if (selectedRegion) {
-      cityOptionSource = cityOptionSource.filter(m => m.region === selectedRegion);
+  // 2) قادة الفرق المسموح بهم
+  const permissionedTeamLeaders = teamLeaders.filter((tl) => {
+    if (userFilters?.Team_leader === null) return true;
+    if (Array.isArray(userFilters?.Team_leader)) {
+      if (userFilters.Team_leader.length === 0) return false;
+      return userFilters.Team_leader.includes(tl.id);
     }
-    const finalCityOptions =
-  [...new Set(
-    cityOptionSource
-      .map(m => m.city)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
+    return false;
+  });
 
+  // 3) فلترة حسب القائد/الجغرافيا
+  let marketsFilteredByTL = permissionedMarkets;
+  if (selectedTeamLeader) {
+    const marketIdsForTl = new Set(tlMarketMap[selectedTeamLeader] || []);
+    marketsFilteredByTL = permissionedMarkets.filter((m) => marketIdsForTl.has(m.id));
+  }
 
-    let marketOptionSource = marketsFilteredByTL;
-    if (selectedRegion) marketOptionSource = marketOptionSource.filter(m => m.region === selectedRegion);
-    if (selectedCity) marketOptionSource = marketOptionSource.filter(m => m.city === selectedCity);
-    const finalMarketOptions =
-  [...new Set(
-    marketOptionSource
-      .map(m => m.store)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0)
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
+  let marketsFilteredByGeo = permissionedMarkets;
+  if (selectedRegion) marketsFilteredByGeo = marketsFilteredByGeo.filter((m) => m.region === selectedRegion);
+  if (selectedCity) marketsFilteredByGeo = marketsFilteredByGeo.filter((m) => m.city === selectedCity);
+  if (selectedMarketName) marketsFilteredByGeo = marketsFilteredByGeo.filter((m) => m.store === selectedMarketName);
 
-      
-    const relevantMarketIds = new Set(marketsFilteredByGeo.map(m => m.id));
-    const finalTeamLeaderOptions = permissionedTeamLeaders.filter(tl => {
-      if (!selectedRegion && !selectedCity && !selectedMarketName) return true;
-      const tlMarkets = tlMarketMap[tl.id] || [];
-      return tlMarkets.some(marketId => relevantMarketIds.has(marketId));
-    });
+  // 4) بناء قوائم الاختيارات (بدون تكرار)
+  const finalRegionOptions = [
+    ...new Set(
+      marketsFilteredByTL
+        .map((m) => m.region)
+        .filter((x): x is string => typeof x === "string" && x.length > 0)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ar"));
 
-        // =============================================================
-        // START: التعديل المطلوب هنا
-        // =============================================================
-    return {
-            // إذا كانت هناك منطقة افتراضية محددة، استخدمها، وإلا اعرض كل الخيارات المتاحة
-      regionOptions: userFilters?.default_region?.length ? userFilters.default_region : finalRegionOptions,
-            // إذا كانت هناك مدينة افتراضية محددة، استخدمها، وإلا اعرض كل الخيارات المتاحة
-      cityOptions: userFilters?.default_city?.length ? userFilters.default_city : finalCityOptions,
-            // (جديد) إذا كانت هناك أسواق مسموح بها، استخدمها، وإلا اعرض كل الخيارات المتاحة
-      marketOptions: userFilters?.allowed_markets?.length ? userFilters.allowed_markets.sort((a: string, b: string) => a.localeCompare(b, 'ar')) : finalMarketOptions,
-            // (جديد) إذا كان هناك قادة فرق محددين، اعرضهم، وإلا اعرض كل الخيارات المتاحة
-      teamLeaderOptions: userFilters?.Team_leader?.length ? permissionedTeamLeaders : finalTeamLeaderOptions,
-    };
-        // =============================================================
-        // END: نهاية التعديل
-        // =============================================================
+  let cityOptionSource = marketsFilteredByTL;
+  if (selectedRegion) cityOptionSource = cityOptionSource.filter((m) => m.region === selectedRegion);
 
-  }, [allMarkets, teamLeaders, userFilters, selectedRegion, selectedCity, selectedMarketName, selectedTeamLeader, tlMarketMap]);
+  const finalCityOptions = [
+    ...new Set(
+      cityOptionSource
+        .map((m) => m.city)
+        .filter((x): x is string => typeof x === "string" && x.length > 0)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ar"));
+
+  let marketOptionSource = marketsFilteredByTL;
+  if (selectedRegion) marketOptionSource = marketOptionSource.filter((m) => m.region === selectedRegion);
+  if (selectedCity) marketOptionSource = marketOptionSource.filter((m) => m.city === selectedCity);
+
+  const finalMarketOptions = [
+    ...new Set(
+      marketOptionSource
+        .map((m) => m.store)
+        .filter((x): x is string => typeof x === "string" && x.length > 0)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ar"));
+
+  // 5) ربط القادة بالأسواق المتاحة بعد الفلاتر
+  const relevantMarketIds = new Set(marketsFilteredByGeo.map((m) => m.id));
+  const finalTeamLeaderOptions = permissionedTeamLeaders.filter((tl) => {
+    if (!selectedRegion && !selectedCity && !selectedMarketName) return true;
+    const tlMarkets = tlMarketMap[tl.id] || [];
+    return tlMarkets.some((marketId) => relevantMarketIds.has(marketId));
+  });
+
+  return {
+    regionOptions: userFilters?.default_region?.length ? userFilters.default_region : finalRegionOptions,
+    cityOptions: userFilters?.default_city?.length ? userFilters.default_city : finalCityOptions,
+    marketOptions: userFilters?.allowed_markets?.length
+      ? [...userFilters.allowed_markets].sort((a, b) => a.localeCompare(b, "ar"))
+      : finalMarketOptions,
+    teamLeaderOptions: userFilters?.Team_leader?.length ? permissionedTeamLeaders : finalTeamLeaderOptions,
+  };
+}, [
+  allMarkets,
+  teamLeaders,
+  userFilters,
+  selectedRegion,
+  selectedCity,
+  selectedMarketName,
+  selectedTeamLeader,
+  tlMarketMap,
+]);
 
     const orderedStats = useMemo(() => {
         const presence = presenceSeconds, visit = visitSeconds, transit = transitSeconds;
