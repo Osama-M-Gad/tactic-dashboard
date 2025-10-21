@@ -2,28 +2,30 @@ name: Daily Send Report
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # كل يوم 00:00 UTC = 3:00 فجراً بتوقيت الرياض
-  workflow_dispatch:       # تشغيل يدوي عند الحاجة
+    - cron: '0 0 * * *'   # 00:00 UTC = 3:00 فجراً بتوقيت الرياض
+  workflow_dispatch: {}    # تشغيل يدوي
 
 jobs:
   call-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Supabase Edge Function
+      - name: Call Supabase Edge Function (debug)
         env:
           FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
           CRON_KEY: ${{ secrets.CRON_KEY }}
         run: |
           set -e
+          set -x
           echo "POST $FUNCTION_URL"
-          http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$FUNCTION_URL" \
+          http_code=$(curl -sS -v -o /tmp/resp.txt -w "%{http_code}" -X POST "$FUNCTION_URL" \
             -H "x-cron-key: $CRON_KEY" \
             -H "Content-Type: application/json" \
             --data '{}')
-
-          echo "HTTP $http_code"
+          set +x
+          echo "---- HTTP $http_code ----"
+          echo "---- BODY ----"
           cat /tmp/resp.txt || true
-
+          echo "-------------"
           if [ "$http_code" -ge 400 ]; then
             exit 1
           fi
