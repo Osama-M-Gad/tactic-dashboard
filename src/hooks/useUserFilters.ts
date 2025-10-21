@@ -7,9 +7,11 @@ export type UserFiltersType = {
   default_region: string[] | null;
   default_city: string[] | null;
   allowed_markets: string[] | null;
-  // تأكد من أن اسم الخاصية هذه مطابق تمامًا لما تتوقعه (Team_leader أو TeamLeader)
-  Team_leader: string[] | null; 
+  Team_leader: string[] | null;
+  notifications?: boolean;
+  requests?: boolean; // 👈 أضف هذا السطر
 };
+
 
 // الهوك المخصص لقراءة فلاتر المستخدم
 export function useUserFilters() {

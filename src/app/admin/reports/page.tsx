@@ -1061,7 +1061,7 @@ const uniqueVisible = Array.from(new Map(visible.map(item => [item.id, item])).v
 {/* Modal to show End Reason */}
       {endReasonViewer.open && (
         <div
-          onClick={() => setEndReasonViewer({ open: false, reason: "", photo: "" })}
+          onClick={() => setEndReasonViewer({ open: false, reasonEn: "", reasonAr: "", photo: "" })}
           style={{
             position: "fixed",
             inset: 0,
@@ -1101,7 +1101,7 @@ const uniqueVisible = Array.from(new Map(visible.map(item => [item.id, item])).v
     </div>
 )}
             <button
-              onClick={() => setEndReasonViewer({ open: false, reason: "", photo: "" })}
+              onClick={() => setEndReasonViewer({ open: false, reasonEn: "", reasonAr: "", photo: "" })}
               style={{...btnSm(true), alignSelf: 'flex-end', minWidth: 100}}
             >
               {ar ? "إغلاق" : "Close"}

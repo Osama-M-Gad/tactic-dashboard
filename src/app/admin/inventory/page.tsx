@@ -13,7 +13,7 @@ import "react-datepicker/dist/react-datepicker.css";
 type UUID = string;
 type UserRow = { id: UUID; name: string | null; arabic_name: string | null; role: string | null; team_leader_id: UUID | null; };
 type MarketRow = { id: UUID; store: string | null; branch: string | null; region: string | null; city: string | null; };
-type InventoryReport = { id: UUID; created_at: string; is_available: boolean | null; quantity: number[] | null; expiry_date: (string | null)[] | null; custom_reason: string | null; photos: string[] | null; user?: { id: UUID; name: string | null; arabic_name: string | null }; market?: { id: UUID; store: string | null; branch: string | null; region: string | null }; product?: { name: string | null }; reason?: { reason_en: string | null; reason_ar: string | null }; };
+type InventoryReport = { id: UUID; created_at: string; is_available: boolean | null; quantity: number[] | null; expiry_date: (string | null)[] | null; custom_reason: string | null; photos: string[] | null; user?: { id: UUID; name: string | null; arabic_name: string | null }; market?: { id: string; store: string | null; branch: string | null; region: string | null; city: string | null }; product?: { name: string | null }; reason?: { reason_en: string | null; reason_ar: string | null }; };
 
 /* ========= Small UI helpers ========= */
 const cardBorder = "1px solid var(--divider)";
