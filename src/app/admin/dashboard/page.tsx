@@ -393,11 +393,35 @@ export default function AdminDashboardPage() {
     if (selectedMarketName) marketsFilteredByGeo = marketsFilteredByGeo.filter(m => m.store === selectedMarketName);
 
     // 4. توليد القوائم النهائية للـ dropdowns
-    const finalRegionOptions =
-  [...new Set(marketsFilteredByTL
-    .map(m => m.region)
-    .filter((x): x is string => typeof x === 'string' && x.length > 0) // 👈 بدّل filter(Boolean)
+const finalRegionOptions =
+  [...new Set(
+    marketsFilteredByTL
+      .map(m => m.region)
+      .filter((x): x is string => typeof x === 'string' && x.length > 0)
   )].sort((a, b) => a.localeCompare(b, 'ar'));
+
+let cityOptionSource = marketsFilteredByTL;
+if (selectedRegion) {
+  cityOptionSource = cityOptionSource.filter(m => m.region === selectedRegion);
+}
+const finalCityOptions =
+  [...new Set(
+    cityOptionSource
+      .map(m => m.city)
+      .filter((x): x is string => typeof x === 'string' && x.length > 0)
+  )].sort((a, b) => a.localeCompare(b, 'ar'));
+
+let marketOptionSource = marketsFilteredByTL;
+if (selectedRegion) marketOptionSource = marketOptionSource.filter(m => m.region === selectedRegion);
+if (selectedCity)   marketOptionSource = marketOptionSource.filter(m => m.city   === selectedCity);
+
+const finalMarketOptions =
+  [...new Set(
+    marketOptionSource
+      .map(m => m.store)
+      .filter((x): x is string => typeof x === 'string' && x.length > 0)
+  )].sort((a, b) => a.localeCompare(b, 'ar'));
+
 
     let cityOptionSource = marketsFilteredByTL;
     if (selectedRegion) {
