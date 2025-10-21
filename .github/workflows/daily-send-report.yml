@@ -1,73 +1,41 @@
-- name: Call Supabase Edge Function (debug & sanitize)
-  env:
-    FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
-    CRON_KEY:     ${{ secrets.CRON_KEY }}
-  run: |
-    set -euo pipefail
+name: Daily Send Report
 
-    echo "Starting debug for function call..."
+on:
+  # تشغيل مجدول: كل يوم الساعة 03:00 فجراً بتوقيت الرياض
+  schedule:
+    - cron: '0 0 * * *'
+  # تفعيل زر التشغيل اليدوي في صفحة Actions
+  workflow_dispatch:
 
-    # تنظيف الـ URL ومفتاح الكرون
-    URL_CLEAN=$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')
-    KEY_CLEAN=$(printf %s "$CRON_KEY"     | tr -dc '[:print:]')
+jobs:
+  call-function:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase Edge Function
+        env:
+          FUNCTION_URL: ${{ secrets.FUNCTION_URL }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          set -eo pipefail
+          URL_CLEAN="$(printf %s "$FUNCTION_URL" | tr -dc '[:print:]')"
+          KEY_CLEAN="$(printf %s "$CRON_KEY" | tr -dc '[:print:]')"
 
-    echo "Checking inputs..."
-    if [ -z "$URL_CLEAN" ]; then
-      echo "ERROR: FUNCTION_URL is EMPTY"; exit 1
-    fi
-    if [ -z "$KEY_CLEAN" ]; then
-      echo "ERROR: CRON_KEY is EMPTY"; exit 1
-    fi
+          if [ -z "$URL_CLEAN" ]; then
+            echo "ERROR: FUNCTION_URL is EMPTY"; exit 1
+          fi
+          if [ -z "$KEY_CLEAN" ]; then
+            echo "ERROR: CRON_KEY is EMPTY"; exit 1
+          fi
 
-    # Masked display (أول 8 وآخر 6 أحرف) لمزيد من التأكيد دون كشف السر
-    mask() {
-      s="$1"
-      len=${#s}
-      if [ "$len" -le 16 ]; then
-        printf '***%s***' "${s:0:len}"
-      else
-        printf '%s***%s' "${s:0:8}" "${s: -6}"
-      fi
-    }
+          # إرسال الطلب إلى الفانكشن
+          http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
+            -H "x-cron-key: $KEY_CLEAN" \
+            -H "Content-Type: application/json" \
+            --data '{}')
 
-    echo "FUNCTION_URL (masked): $(mask "$URL_CLEAN")"
-    echo "CRON_KEY (masked): $(mask "$KEY_CLEAN")"
+          echo "HTTP $http_code"
+          cat /tmp/resp.txt || true
 
-    case "$URL_CLEAN" in
-      https://* ) ;;                         # يجب أن يبدأ بـ https://
-      * )
-        echo "ERROR: FUNCTION_URL must start with https:// -- got: $URL_CLEAN"; exit 1 ;;
-    esac
-
-    echo "POST (masked) URL length: $(echo -n "$URL_CLEAN" | wc -c)"
-
-    # استخدم -v لعرض handshake و headers لتشخيص المشكلات، وحفظ الاستجابة
-    echo "Running curl (verbose)..."
-    # الافتراضي: يرسل x-cron-key كما في كودك الأصلي
-    http_code=$(curl -v --show-error -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
-      -H "x-cron-key: $KEY_CLEAN" \
-      -H "Content-Type: application/json" \
-      --data '{}' || true)
-
-    # إذا الفانكشن يتطلب Authorization: Bearer بدل x-cron-key، استبدل السطر أعلاه بهذا:
-    # http_code=$(curl -v --show-error -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$URL_CLEAN" \
-    #   -H "Authorization: Bearer $KEY_CLEAN" \
-    #   -H "Content-Type: application/json" \
-    #   --data '{}' || true)
-
-    echo "---- HTTP $http_code ----"
-    echo "Response body (first 2000 chars):"
-    head -c 2000 /tmp/resp.txt || true
-    echo
-
-    if [ -z "$http_code" ]; then
-      echo "ERROR: curl did not return an HTTP code — check network/SSL or curl output above."
-      exit 1
-    fi
-
-    if [ "$http_code" -ge 400 ]; then
-      echo "ERROR: server returned HTTP $http_code"
-      exit 1
-    fi
-
-    echo "Function call appears successful (HTTP $http_code)."
+          if [ "$http_code" -ge 400 ]; then
+            exit 1
+          fi
