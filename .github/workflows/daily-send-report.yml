@@ -8,7 +8,41 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-function:
+  call-function:name: Send Daily Report
+
+# This workflow runs daily at midnight UTC (03:00 KSA) and
+# invokes the Supabase Edge Function to send the dname: Send Daily Report
+
+# This workflow runs daily at midnight UTC (03:00 KSA) and
+# invokes the Supabase Edge Function to send the daily email report.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Supabase Edge Function
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            https://sygnesgnnaoadhrzacmp.functions.supabase.co/send-daily-reportaily email report.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Supabase Edge Function
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            https://sygnesgnnaoadhrzacmp.functions.supabase.co/send-daily-report
     runs-on: ubuntu-latest
     steps:
       - name: Call Supabase Edge Function
